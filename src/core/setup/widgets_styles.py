@@ -425,6 +425,12 @@ WINDOWS_DESKTOPS_WIDGET_STYLE: str = """\
     font-family: var(--system-font);
     font-weight: 600;
 }
+.windows-desktops .current-desktop-label .label,
+.windows-desktops .current-desktop-label .icon {
+    color: var(--yasb-fg);
+    font-family: var(--system-font);
+    font-weight: 600;
+}
 .windows-desktops-menu {
     background-color: var(--yasb-popup-bg);
     border: 1px solid var(--yasb-border-color);

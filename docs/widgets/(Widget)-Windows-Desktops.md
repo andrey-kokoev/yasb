@@ -4,7 +4,7 @@
 | `render_mode` | string | `'buttons'` | Render all desktop buttons (`buttons`) or only the current desktop label (`current`). |
 | `label_workspace_btn` | string | `'{index}'` | The format string for workspace buttons. |
 | `label_workspace_active_btn` | string | `'{index}'` | The format string for the active workspace button. |
-| `label_current_desktop` | string | `'{name}'` | The format string used by `render_mode: 'current'`. |
+| `label_current_desktop` | string | `'{name}'` | The format string used by `render_mode: 'current'`. Supports text, `<span>`, and `<img>` fragments. |
 | `menu` | dict | See below | Popup menu options for `render_mode: 'current'`. |
 | `callbacks` | dict | `{'on_left': 'activate_workspace', 'on_middle': 'do_nothing', 'on_right': 'toggle_context_menu'}` | Callbacks for mouse events on workspace buttons. |
 
@@ -29,7 +29,7 @@ windows_workspaces:
   type: "yasb.windows_desktops.WorkspaceWidget"
   options:
     render_mode: "current"
-    label_current_desktop: "{name}"
+    label_current_desktop: "{name} <img src='C:/Users/Andrey/.config/yasb/icons/chevron-right.svg' width='14' height='14'>"
     callbacks:
       on_left: "toggle_desktop_menu"
       on_middle: "do_nothing"
@@ -46,7 +46,7 @@ windows_workspaces:
 ## Description of Options
 - **label_workspace_btn:** The format string for workspace buttons, can be icon, {index} or {name}.
 - **label_workspace_active_btn:** The format string for the active workspace button, can be icon, {index} or {name}.
-- **label_current_desktop:** The format string for current desktop mode, can use `{index}` or `{name}`.
+- **label_current_desktop:** The format string for current desktop mode, can use `{index}` or `{name}`. Text, `<span>`, and `<img>` fragments are rendered as separate aligned label parts so SVG icons can sit beside text without relying on inline rich-text baseline alignment.
 - **menu:** Popup menu options for current desktop mode.
 - **callbacks:** A dictionary specifying the callbacks for mouse events on workspace buttons. The keys are `on_left`, `on_middle`, and `on_right`, and the values are the names of the callback functions.
 
@@ -69,6 +69,8 @@ windows_workspaces:
 .windows-desktops .ws-btn {} /*Style for buttons.*/
 .windows-desktops .ws-btn.active {} /*Style for the active workspace button.*/
 .windows-desktops .current-desktop-label {} /*Style for the current desktop label.*/
+.windows-desktops .current-desktop-label .label {} /*Style for text fragments in the current desktop label.*/
+.windows-desktops .current-desktop-label .icon {} /*Style for span/img fragments in the current desktop label.*/
 .windows-workspaces .ws-btn.button-1 {} /*Style for first button.*/
 .windows-workspaces .ws-btn.button-2 {} /*Style for second  button.*/
 .windows-workspaces .ws-btn.active.button-1 {} /*Style for the active first workspace button.*/

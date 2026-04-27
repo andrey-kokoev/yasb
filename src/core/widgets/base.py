@@ -1,3 +1,4 @@
+import html
 import logging
 import re
 import subprocess
@@ -7,11 +8,116 @@ from typing import Any
 from pydantic import BaseModel
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QMouseEvent
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QWidget
 
 from core.events.service import EventService
 from core.utils.win32.system_function import function_map
 from core.widgets.registry import register_widget_class
+
+
+class ComposedLabel(QFrame):
+    """Render text, span icons, and image fragments as separately aligned labels."""
+
+    _fragment_pattern = re.compile(r"(<span\b.*?>.*?</span>|<img\b[^>]*>)", re.IGNORECASE | re.DOTALL)
+
+    def __init__(self, class_name: str = "composed-label"):
+        super().__init__()
+        self._layout = QHBoxLayout(self)
+        self._layout.setSpacing(0)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.setProperty("class", class_name)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+    def set_content(self, content: str) -> None:
+        self.clear()
+
+        for fragment in self._fragments(content):
+            label = self._create_fragment_label(fragment)
+            if label:
+                self._layout.addWidget(label, 0, Qt.AlignmentFlag.AlignVCenter)
+
+    def clear(self) -> None:
+        for i in reversed(range(self._layout.count())):
+            item = self._layout.itemAt(i)
+            widget = item.widget()
+            if widget:
+                self._layout.removeWidget(widget)
+                widget.setParent(None)
+
+    @classmethod
+    def _fragments(cls, content: str) -> list[str]:
+        fragments = []
+        for part in cls._fragment_pattern.split(content):
+            if part and part.strip():
+                fragments.append(part.strip())
+        return fragments
+
+    def _create_fragment_label(self, fragment: str) -> QLabel | None:
+        if self._is_span(fragment):
+            label = QLabel(self._span_text(fragment))
+            label.setProperty("class", self._html_class(fragment, "icon"))
+        elif self._is_img(fragment):
+            label = QLabel(self._normalized_img(fragment))
+            label.setProperty("class", self._html_class(fragment, "icon image"))
+            size = self._img_size(fragment)
+            if size:
+                label.setFixedSize(*size)
+        else:
+            label = QLabel(fragment)
+            label.setProperty("class", "label")
+
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        return label
+
+    @staticmethod
+    def _is_span(fragment: str) -> bool:
+        return fragment.lower().startswith("<span") and fragment.lower().endswith("</span>")
+
+    @staticmethod
+    def _is_img(fragment: str) -> bool:
+        return fragment.lower().startswith("<img")
+
+    @staticmethod
+    def _span_text(fragment: str) -> str:
+        return re.sub(r"<span\b.*?>|</span>", "", fragment, flags=re.IGNORECASE | re.DOTALL).strip()
+
+    @staticmethod
+    def _html_class(fragment: str, default: str) -> str:
+        class_name = re.search(r'class=(["\'])([^"\']+?)\1', fragment, re.IGNORECASE)
+        return class_name.group(2) if class_name else default
+
+    @staticmethod
+    def _html_attr(fragment: str, attr: str) -> str | None:
+        match = re.search(rf'{attr}=(["\'])([^"\']+?)\1', fragment, re.IGNORECASE)
+        if match:
+            return match.group(2)
+        return None
+
+    @classmethod
+    def _img_size(cls, fragment: str) -> tuple[int, int] | None:
+        width = cls._html_attr(fragment, "width")
+        height = cls._html_attr(fragment, "height")
+        if not width or not height:
+            return None
+        try:
+            return int(float(width)), int(float(height))
+        except ValueError:
+            return None
+
+    @classmethod
+    def _normalized_img(cls, fragment: str) -> str:
+        src = cls._html_attr(fragment, "src")
+        if not src:
+            return fragment
+
+        attrs = [f'src="{html.escape(src, quote=True)}"']
+        for attr in ("width", "height"):
+            value = cls._html_attr(fragment, attr)
+            if value:
+                attrs.append(f'{attr}="{html.escape(value, quote=True)}"')
+        return f"<img {' '.join(attrs)}>"
 
 
 class BaseWidget(QWidget):

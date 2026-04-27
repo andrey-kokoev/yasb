@@ -21,7 +21,7 @@ from core.utils.system import is_windows_10
 from core.utils.utilities import PopupWidget, refresh_widget_style
 from core.utils.win32.utils import apply_qmenu_style
 from core.validation.widgets.yasb.windows_desktops import WindowsDesktopsConfig
-from core.widgets.base import BaseWidget
+from core.widgets.base import BaseWidget, ComposedLabel
 from core.widgets.services.windows_desktops.service import WindowsDesktopService
 
 
@@ -315,7 +315,7 @@ class WorkspaceWidget(BaseWidget):
         self._prev_workspace_index = None
         self._curr_workspace_index = self._svc.get_current_desktop().number
         self._workspace_buttons: list[WorkspaceButton] = []
-        self._current_label: QLabel | None = None
+        self._current_label: ComposedLabel | None = None
 
         self._clicked_button: WorkspaceButton | None = None
 
@@ -360,9 +360,8 @@ class WorkspaceWidget(BaseWidget):
             logging.exception("Initial update_desktops failed on register")
 
     def _init_current_desktop_label(self):
-        self._current_label = QLabel()
+        self._current_label = ComposedLabel("current-desktop-label")
         self._current_label.setProperty("class", "current-desktop-label")
-        self._current_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self._current_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self._widget_container_layout.addWidget(self._current_label)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -446,7 +445,7 @@ class WorkspaceWidget(BaseWidget):
             return
 
         ws_name = self._svc.get_desktop_name(self._curr_workspace_index) or str(self._curr_workspace_index)
-        self._current_label.setText(
+        self._current_label.set_content(
             self.config.label_current_desktop.format(index=self._curr_workspace_index, name=ws_name)
         )
 
