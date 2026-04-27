@@ -42,6 +42,7 @@ class WorkspaceButton(QPushButton):
         self.setText(self.default_label)
         self.parent_widget = parent
         self.clicked.connect(self._on_clicked)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
     def _on_clicked(self):

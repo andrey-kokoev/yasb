@@ -231,6 +231,7 @@ class BaseWidget(QWidget):
         self.callback_left: str | list[str] = self.callback_default
         self.callback_middle: str | list[str] = self.callback_default
         self.callback_right: str | list[str] = self.callback_default
+        QTimer.singleShot(0, self._sync_pointer_cursor)
 
         self._event_service = EventService()
         self._hotkey_signal.connect(self._handle_hotkey_event)
@@ -259,18 +260,43 @@ class BaseWidget(QWidget):
         self.callbacks[callback_name] = fn
 
     def start_timer(self):
+        self._sync_pointer_cursor()
         if self.timer_interval and self.timer_interval > 0:
             self.timer.timeout.connect(self._timer_callback)
             self.timer.start(self.timer_interval)
         self._timer_callback()
 
     def _handle_mouse_events(self, event: QMouseEvent):
+        self._sync_pointer_cursor()
         if event.button() == Qt.MouseButton.LeftButton:
             self._run_callback(self.callback_left)
         elif event.button() == Qt.MouseButton.MiddleButton:
             self._run_callback(self.callback_middle)
         elif event.button() == Qt.MouseButton.RightButton:
             self._run_callback(self.callback_right)
+
+    def _sync_pointer_cursor(self):
+        cursor = (
+            Qt.CursorShape.PointingHandCursor
+            if self._has_mouse_callback()
+            else Qt.CursorShape.ArrowCursor
+        )
+        self.setCursor(cursor)
+        self._widget_frame.setCursor(cursor)
+        for label in self._widget_frame.findChildren(QLabel):
+            label.setCursor(cursor)
+
+    def _has_mouse_callback(self) -> bool:
+        return any(
+            self._is_interactive_callback(callback)
+            for callback in (self.callback_left, self.callback_middle, self.callback_right)
+        )
+
+    def _is_interactive_callback(self, callback: str | list[str]) -> bool:
+        if isinstance(callback, list):
+            return any(self._is_interactive_callback(item) for item in callback)
+        callback_type = callback.split(maxsplit=1)[0] if callback else "default"
+        return callback_type not in {"default", "do_nothing"}
 
     def _run_callback(self, callback_str: str | list):
         if " " in callback_str:
