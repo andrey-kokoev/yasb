@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
+from core.utils.tooltip import set_tooltip
 from core.utils.utilities import PopupWidget, refresh_widget_style
 from core.utils.win32.backdrop import enable_blur
 from core.utils.win32.window_actions import force_foreground_focus
@@ -112,6 +113,8 @@ class PowerMenuWidget(BaseWidget):
         # Construct container and label
         self._init_container()
         self.build_widget_label(self.config.label, None)
+        if self.config.tooltip:
+            set_tooltip(self, self.config.tooltip, delay=400, position="top")
 
         self.register_callback("toggle_power_menu", self._show_main_window)
 

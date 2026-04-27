@@ -30,6 +30,7 @@ class WindowsDesktopsConfig(CustomBaseModel):
     label_workspace_btn: str = "{index}"
     label_workspace_active_btn: str = "{index}"
     label_current_desktop: str = "{name}"
+    tooltip: str | None = None
     menu: WindowsDesktopsMenuConfig = WindowsDesktopsMenuConfig()
     callbacks: WindowsDesktopsCallbacksConfig = WindowsDesktopsCallbacksConfig()
     keybindings: list[KeybindingConfig] = []

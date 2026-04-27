@@ -176,7 +176,7 @@ class CustomWidget(BaseWidget):
         if self.config.tooltip_label:
             try:
                 tooltip_text = self.config.tooltip_label.format(data=self._exec_data)
-            except KeyError, AttributeError, TypeError, IndexError:
+            except (KeyError, AttributeError, TypeError, IndexError):
                 # If formatting fails, fall back to showing raw data
                 tooltip_text = str(self._exec_data)
         else:

@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayou
 
 from core.events.komorebi import KomorebiEvent
 from core.events.service import EventService
+from core.utils.tooltip import set_tooltip
 from core.utils.utilities import PopupWidget
 from core.utils.win32.utils import get_monitor_hwnd
 from core.validation.widgets.komorebi.active_layout import ActiveLayoutConfig
@@ -296,6 +297,13 @@ class ActiveLayoutWidget(BaseWidget):
                 self._active_layout_text.setText(
                     self.config.label.replace("{icon}", layout_icon).replace("{layout_name}", layout_name)
                 )
+                if self.config.tooltip:
+                    set_tooltip(
+                        self._active_layout_text,
+                        self.config.tooltip.replace("{layout_name}", layout_name),
+                        delay=400,
+                        position="top",
+                    )
 
                 if self._active_layout_text.isHidden():
                     self.show()

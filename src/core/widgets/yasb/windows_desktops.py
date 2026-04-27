@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.utils.system import is_windows_10
+from core.utils.tooltip import set_tooltip
 from core.utils.utilities import PopupWidget, refresh_widget_style
 from core.utils.win32.utils import apply_qmenu_style
 from core.validation.widgets.yasb.windows_desktops import WindowsDesktopsConfig
@@ -449,6 +450,13 @@ class WorkspaceWidget(BaseWidget):
         self._current_label.set_content(
             self.config.label_current_desktop.format(index=self._curr_workspace_index, name=ws_name)
         )
+        if self.config.tooltip:
+            set_tooltip(
+                self._current_label,
+                self.config.tooltip.format(index=self._curr_workspace_index, name=ws_name),
+                delay=400,
+                position="top",
+            )
 
     def _show_desktop_menu(self):
         self._menu = PopupWidget(
@@ -589,6 +597,14 @@ class WorkspaceWidget(BaseWidget):
         if workspace_index not in workspace_button_indexes:
             ws_label, ws_active_label = self._get_workspace_label(workspace_index)
             workspace_btn = WorkspaceButton(workspace_index, ws_label, ws_active_label, self)
+            if self.config.tooltip:
+                ws_name = self._svc.get_desktop_name(workspace_index) or str(workspace_index)
+                set_tooltip(
+                    workspace_btn,
+                    self.config.tooltip.format(index=workspace_index, name=ws_name),
+                    delay=400,
+                    position="top",
+                )
             self._update_button(workspace_btn)
             self._workspace_buttons.append(workspace_btn)
             return workspace_btn

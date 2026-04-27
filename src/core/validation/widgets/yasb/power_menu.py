@@ -39,6 +39,7 @@ class PowerMenuCallbacksConfig(CallbacksConfig):
 
 class PowerMenuConfig(CustomBaseModel):
     label: str = "power"
+    tooltip: str | None = None
     uptime: bool = True
     show_user: bool = False
     blur: bool = False

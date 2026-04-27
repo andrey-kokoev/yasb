@@ -42,6 +42,7 @@ class ActiveLayoutCallbacksConfig(CustomBaseModel):
 class ActiveLayoutConfig(CustomBaseModel):
     hide_if_offline: bool = False
     label: str = "{icon}"
+    tooltip: str | None = None
     layouts: list[str] = [
         "bsp",
         "columns",
