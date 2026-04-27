@@ -9,6 +9,7 @@ try:
         AppView,
         VirtualDesktop,
         VirtualDesktopNotificationService,
+        get_apps_by_z_order,
         get_virtual_desktops,
         set_wallpaper_for_all_desktops,
     )
@@ -16,6 +17,7 @@ except Exception:
     AppView = None
     VirtualDesktop = None
     VirtualDesktopNotificationService = None
+    get_apps_by_z_order = None
     get_virtual_desktops = None
     set_wallpaper_for_all_desktops = None
 
@@ -238,6 +240,35 @@ class WindowsDesktopService(QObject):
         except Exception:
             name = ""
         return name.strip() if name else ""
+
+    @staticmethod
+    def get_desktop_window_counts() -> dict[int, int]:
+        counts = {}
+        try:
+            counts = {desktop.number: 0 for desktop in get_virtual_desktops()}
+        except Exception:
+            return counts
+
+        if get_apps_by_z_order is None:
+            return counts
+
+        try:
+            apps = get_apps_by_z_order(current_desktop=False)
+        except Exception:
+            logger.exception("Failed to get app views for desktop window counts")
+            return counts
+
+        for app in apps:
+            try:
+                if not app.is_shown_in_switchers():
+                    continue
+                desktop_number = app.desktop.number
+                if desktop_number in counts:
+                    counts[desktop_number] += 1
+            except Exception:
+                continue
+
+        return counts
 
     @staticmethod
     def set_wallpaper(number: int, path: str):

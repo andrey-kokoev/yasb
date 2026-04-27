@@ -315,15 +315,14 @@ class WorkspaceWidget(BaseWidget):
         self._prev_workspace_index = None
         self._curr_workspace_index = self._svc.get_current_desktop().number
         self._workspace_buttons: list[WorkspaceButton] = []
+        self._current_label: QLabel | None = None
 
         self._clicked_button: WorkspaceButton | None = None
-
-        # Disable default mouse event handling inherited from BaseWidget
-        self.mousePressEvent = None
 
         # Register callbacks
         self.register_callback("activate_workspace", self._cb_activate_workspace)
         self.register_callback("toggle_context_menu", self._cb_toggle_context_menu)
+        self.register_callback("toggle_desktop_menu", self._toggle_desktop_menu)
         self.register_callback("move_window_here", self._cb_move_window_here)
         self.register_callback("delete_workspace", self._cb_delete_workspace)
         self.register_callback("create_desktop", self._cb_create_desktop)
@@ -331,11 +330,18 @@ class WorkspaceWidget(BaseWidget):
 
         # Wire config callbacks to mouse buttons
         self.callback_left = config.callbacks.on_left
+        if config.render_mode == "current" and self.callback_left == "activate_workspace":
+            self.callback_left = "toggle_desktop_menu"
         self.callback_right = config.callbacks.on_right
         self.callback_middle = config.callbacks.on_middle
 
         # Construct container which holds workspace buttons
         self._init_container()
+        if self.config.render_mode == "buttons":
+            # Workspace buttons handle their own mouse events.
+            self.mousePressEvent = None
+        else:
+            self._init_current_desktop_label()
 
         self.register_callback("update_desktops", self._force_update)
 
@@ -353,6 +359,15 @@ class WorkspaceWidget(BaseWidget):
         except Exception:
             logging.exception("Initial update_desktops failed on register")
 
+    def _init_current_desktop_label(self):
+        self._current_label = QLabel()
+        self._current_label.setProperty("class", "current-desktop-label")
+        self._current_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self._current_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._widget_container_layout.addWidget(self._current_label)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._update_current_desktop_label()
+
     def _force_update(self):
         self._svc.notify_desktops_updated(update_buttons=False)
 
@@ -363,6 +378,9 @@ class WorkspaceWidget(BaseWidget):
     def _cb_toggle_context_menu(self):
         if self._clicked_button:
             self._clicked_button._show_context_menu()
+
+    def _toggle_desktop_menu(self):
+        self._show_desktop_menu()
 
     def _cb_move_window_here(self):
         if self._clicked_button:
@@ -392,6 +410,10 @@ class WorkspaceWidget(BaseWidget):
         self._prev_workspace_index = self._curr_workspace_index
         self._curr_workspace_index = new_index
 
+        if self.config.render_mode == "current":
+            self._update_current_desktop_label()
+            return
+
         # Update only affected buttons (previous and current) and animate both simultaneously
         prev_btn = next((b for b in self._workspace_buttons if b.workspace_index == self._prev_workspace_index), None)
         curr_btn = next((b for b in self._workspace_buttons if b.workspace_index == self._curr_workspace_index), None)
@@ -413,8 +435,83 @@ class WorkspaceWidget(BaseWidget):
         ):
             self._virtual_desktops = self._virtual_desktops_check
             self._curr_workspace_index = self._curr_workspace_index_check
-            self._add_or_remove_buttons()
-            self.refresh_workspace_button_labels()
+            if self.config.render_mode == "current":
+                self._update_current_desktop_label()
+            else:
+                self._add_or_remove_buttons()
+                self.refresh_workspace_button_labels()
+
+    def _update_current_desktop_label(self):
+        if not self._current_label:
+            return
+
+        ws_name = self._svc.get_desktop_name(self._curr_workspace_index) or str(self._curr_workspace_index)
+        self._current_label.setText(
+            self.config.label_current_desktop.format(index=self._curr_workspace_index, name=ws_name)
+        )
+
+    def _show_desktop_menu(self):
+        self._menu = PopupWidget(
+            self,
+            self.config.menu.blur,
+            self.config.menu.round_corners,
+            self.config.menu.round_corners_type,
+            self.config.menu.border_color,
+        )
+        self._menu.setProperty("class", "windows-desktops-menu")
+
+        main_layout = QVBoxLayout(self._menu)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        window_counts = WindowsDesktopService.get_desktop_window_counts()
+
+        def create_menu_item(desktop_number: int, text: str, window_count: int):
+            item = QFrame()
+            class_name = "menu-item active" if desktop_number == self._curr_workspace_index else "menu-item"
+            item.setProperty("class", class_name)
+            item_layout = QHBoxLayout(item)
+            item_layout.setContentsMargins(0, 0, 0, 0)
+
+            text_label = QLabel(text)
+            text_label.setProperty("class", "menu-item-text")
+            text_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            text_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            item_layout.addWidget(text_label)
+
+            if self.config.menu.show_window_count:
+                count_label = QLabel(str(window_count))
+                count_label.setProperty("class", "menu-item-count")
+                count_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                count_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+                item_layout.addWidget(count_label)
+
+            def handler(event, number=desktop_number):
+                WindowsDesktopService.switch_desktop(number)
+                WindowsDesktopService().notify_desktop_changed(number)
+                self._menu.hide()
+
+            item.mousePressEvent = handler
+            return item
+
+        for workspace_index in self._virtual_desktops:
+            ws_name = self._svc.get_desktop_name(workspace_index) or f"Desktop {workspace_index}"
+            main_layout.addWidget(
+                create_menu_item(
+                    workspace_index,
+                    f"{workspace_index}. {ws_name}",
+                    window_counts.get(workspace_index, 0),
+                )
+            )
+
+        self._menu.adjustSize()
+        self._menu.setPosition(
+            alignment=self.config.menu.alignment,
+            direction=self.config.menu.direction,
+            offset_left=self.config.menu.offset_left,
+            offset_top=self.config.menu.offset_top,
+        )
+        self._menu.show()
 
     def refresh_workspace_button_labels(self):
         for button in self._workspace_buttons:

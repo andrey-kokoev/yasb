@@ -1,10 +1,12 @@
 # Windows Desktops Widget
-| Option                     | Type    | Default                  | Description                                                                 |
-|----------------------------|---------|--------------------------|-----------------------------------------------------------------------------|
-| `label_workspace_btn`    | string  | `'{index}'`              | The format string for workspace buttons.                                    |
-| `label_workspace_active_btn` | string | `'{index}'`              | The format string for the active workspace button.                          |
-| `switch_workspace_animation` | string | `'true'`                 | The OS animation to use when switching workspaces.                             |
-| `callbacks`             | dict    | `{'on_left': 'activate_workspace', 'on_middle': 'do_nothing', 'on_right': 'toggle_context_menu'}` | Callbacks for mouse events on workspace buttons. |
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `render_mode` | string | `'buttons'` | Render all desktop buttons (`buttons`) or only the current desktop label (`current`). |
+| `label_workspace_btn` | string | `'{index}'` | The format string for workspace buttons. |
+| `label_workspace_active_btn` | string | `'{index}'` | The format string for the active workspace button. |
+| `label_current_desktop` | string | `'{name}'` | The format string used by `render_mode: 'current'`. |
+| `menu` | dict | See below | Popup menu options for `render_mode: 'current'`. |
+| `callbacks` | dict | `{'on_left': 'activate_workspace', 'on_middle': 'do_nothing', 'on_right': 'toggle_context_menu'}` | Callbacks for mouse events on workspace buttons. |
 
 ## Example Configuration
 
@@ -20,10 +22,32 @@ windows_workspaces:
       on_right: "toggle_context_menu"
 ```
 
+### Current Desktop Mode
+
+```yaml
+windows_workspaces:
+  type: "yasb.windows_desktops.WorkspaceWidget"
+  options:
+    render_mode: "current"
+    label_current_desktop: "{name}"
+    callbacks:
+      on_left: "toggle_desktop_menu"
+      on_middle: "do_nothing"
+      on_right: "do_nothing"
+    menu:
+      blur: false
+      round_corners: true
+      alignment: "left"
+      direction: "down"
+      offset_top: 6
+      show_window_count: true
+```
+
 ## Description of Options
 - **label_workspace_btn:** The format string for workspace buttons, can be icon, {index} or {name}.
 - **label_workspace_active_btn:** The format string for the active workspace button, can be icon, {index} or {name}.
-- **switch_workspace_animation:** The OS animation to use when switching workspaces. (currently unsupported)
+- **label_current_desktop:** The format string for current desktop mode, can use `{index}` or `{name}`.
+- **menu:** Popup menu options for current desktop mode.
 - **callbacks:** A dictionary specifying the callbacks for mouse events on workspace buttons. The keys are `on_left`, `on_middle`, and `on_right`, and the values are the names of the callback functions.
 
 ### Available Callbacks
@@ -31,6 +55,7 @@ windows_workspaces:
 |------------------------|--------------------------------------------------------------------------|
 | `activate_workspace`   | Switch to the desktop associated with the clicked button.                |
 | `toggle_context_menu`  | Show the right-click context menu options.                               |
+| `toggle_desktop_menu`  | Show a popup menu of virtual desktops.                                   |
 | `move_window_here`     | Move the currently focused window to the desktop of the clicked button.  |
 | `delete_workspace`     | Delete the desktop associated with the clicked button.                   |
 | `create_desktop`       | Create a new virtual desktop.                                            |
@@ -43,10 +68,18 @@ windows_workspaces:
 .windows-desktops .widget-container {} /*Style for widget container.*/
 .windows-desktops .ws-btn {} /*Style for buttons.*/
 .windows-desktops .ws-btn.active {} /*Style for the active workspace button.*/
+.windows-desktops .current-desktop-label {} /*Style for the current desktop label.*/
 .windows-workspaces .ws-btn.button-1 {} /*Style for first button.*/
 .windows-workspaces .ws-btn.button-2 {} /*Style for second  button.*/
 .windows-workspaces .ws-btn.active.button-1 {} /*Style for the active first workspace button.*/
 .windows-workspaces .ws-btn.active.button-2 {} /*Style for the active second workspace button.*/
+
+.windows-desktops-menu {} /*Style for current desktop popup menu.*/
+.windows-desktops-menu .menu-item {} /*Style for popup menu item.*/
+.windows-desktops-menu .menu-item:hover {} /*Style for hovered popup menu item.*/
+.windows-desktops-menu .menu-item.active {} /*Style for active desktop menu item.*/
+.windows-desktops-menu .menu-item-text {} /*Style for desktop name text.*/
+.windows-desktops-menu .menu-item-count {} /*Style for desktop window count.*/
 
 .windows-desktops .context-menu {} /*Style for context menu.*/
 .windows-desktops .context-menu .menu-item {} /*Style for context menu items.*/

@@ -420,6 +420,37 @@ WINDOWS_DESKTOPS_WIDGET_STYLE: str = """\
     color: var(--yasb-accent-fg);
     background-color: var(--yasb-accent);
 }
+.windows-desktops .current-desktop-label {
+    color: var(--yasb-fg);
+    font-family: var(--system-font);
+    font-weight: 600;
+}
+.windows-desktops-menu {
+    background-color: var(--yasb-popup-bg);
+    border: 1px solid var(--yasb-border-color);
+    border-radius: 6px;
+}
+.windows-desktops-menu .menu-item {
+    background-color: transparent;
+    padding: 6px 12px;
+}
+.windows-desktops-menu .menu-item:hover {
+    background-color: var(--yasb-white-alpha-10);
+}
+.windows-desktops-menu .menu-item.active {
+    background-color: var(--yasb-white-alpha-15);
+}
+.windows-desktops-menu .menu-item-text {
+    color: var(--yasb-fg);
+    font-family: var(--system-font);
+    font-size: 12px;
+}
+.windows-desktops-menu .menu-item-count {
+    color: var(--yasb-fg-muted);
+    font-family: var(--system-font);
+    font-size: 12px;
+    min-width: 24px;
+}
 .windows-desktops-popup.rename {
     min-width: 320px;
     background-color: var(--yasb-dialog-bg);
