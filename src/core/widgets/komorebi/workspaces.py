@@ -366,10 +366,7 @@ class WorkspaceWidget(BaseWidget):
 
             # Update workspace button if number of windows in workspace changes
             for i in range(len(self._komorebi_workspaces)):
-                if (
-                    self._prev_num_windows_in_workspaces[i] != self._curr_num_windows_in_workspaces[i]
-                    and self._curr_num_windows_in_workspaces[i] == 0
-                ):
+                if self._prev_num_windows_in_workspaces[i] != self._curr_num_windows_in_workspaces[i]:
                     self._update_button(self._workspace_buttons[i])
 
             # Remove workspace button if workspace is closed
