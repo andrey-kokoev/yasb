@@ -30,6 +30,7 @@ class KomorebiWorkspacesConfig(CustomBaseModel):
     label_zero_index: bool = False
     hide_empty_workspaces: bool = False
     show_one_empty_workspace: bool = False
+    hide_minimized_windows: bool = False
     app_icons: AppIconsConfig = AppIconsConfig()
     enable_scroll_switching: bool = False
     reverse_scroll_direction: bool = False

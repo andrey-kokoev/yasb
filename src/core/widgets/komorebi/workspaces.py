@@ -6,6 +6,7 @@ from PIL import Image
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QMouseEvent, QPixmap
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
+import win32gui
 
 from core.events.komorebi import KomorebiEvent
 from core.events.service import EventService
@@ -631,7 +632,27 @@ class WorkspaceWidget(BaseWidget):
         floating_windows = [container for container in workspace["floating_windows"]["elements"]]
         if not self.config.app_icons.hide_floating:
             windows_in_workspace.extend(floating_windows)
+        if self.config.hide_minimized_windows:
+            windows_in_workspace = [
+                window for window in windows_in_workspace if not self._is_minimized_or_offscreen(window)
+            ]
         return windows_in_workspace
+
+    def _is_minimized_or_offscreen(self, window: dict) -> bool:
+        hwnd = window.get("hwnd")
+        if hwnd:
+            try:
+                if win32gui.IsIconic(hwnd):
+                    return True
+            except Exception:
+                pass
+
+        rect = window.get("rect") or {}
+        left = rect.get("left", 0)
+        top = rect.get("top", 0)
+        right = rect.get("right", 0)
+        bottom = rect.get("bottom", 0)
+        return left <= -30000 or top <= -30000 or right <= 0 or bottom <= 0
 
     def _get_all_icons_in_workspace(self, workspace_index: int) -> list[QPixmap] | None:
         windows_in_workspace = self._get_all_windows_in_workspace(workspace_index)
