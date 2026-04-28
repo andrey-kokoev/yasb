@@ -350,13 +350,16 @@ class WorkspaceWidget(BaseWidget):
             elif event["type"] in self._workspace_focus_events or self._has_active_workspace_index_changed():
                 # send workspace_update event to active_window widgets
                 self._event_service.emit_event("workspace_update", event["type"])
-                try:
-                    prev_workspace_button = self._workspace_buttons[self._prev_workspace_index]
-                    self._update_button(prev_workspace_button)
-                    new_workspace_button = self._workspace_buttons[self._curr_workspace_index]
-                    self._update_button(new_workspace_button)
-                except IndexError, TypeError:
+                if self.config.show_one_empty_workspace:
                     self._add_or_update_buttons()
+                else:
+                    try:
+                        prev_workspace_button = self._workspace_buttons[self._prev_workspace_index]
+                        self._update_button(prev_workspace_button)
+                        new_workspace_button = self._workspace_buttons[self._curr_workspace_index]
+                        self._update_button(new_workspace_button)
+                    except IndexError, TypeError:
+                        self._add_or_update_buttons()
             elif event["type"] in self._update_buttons_event_watchlist:
                 self._add_or_update_buttons()
 
@@ -464,7 +467,7 @@ class WorkspaceWidget(BaseWidget):
         workspace_index = workspace_btn.workspace_index
         workspace = self._komorebic.get_workspace_by_index(self._komorebi_screen, workspace_index)
         workspace_status = self._get_workspace_new_status(workspace)
-        if self.config.hide_empty_workspaces and workspace_status == WORKSPACE_STATUS_EMPTY:
+        if self._should_hide_workspace(workspace_index, workspace_status):
             workspace_btn.hide()
         else:
             workspace_btn.show()
@@ -472,6 +475,21 @@ class WorkspaceWidget(BaseWidget):
                 workspace_btn.update_and_redraw(workspace_status)
             workspace_btn.update_visible_buttons()
         self._get_workspace_layer(workspace_index)
+
+    def _should_hide_workspace(self, workspace_index: int, workspace_status: WorkspaceStatus) -> bool:
+        if not self.config.hide_empty_workspaces or workspace_status != WORKSPACE_STATUS_EMPTY:
+            return False
+
+        if not self.config.show_one_empty_workspace:
+            return True
+
+        return workspace_index != self._first_empty_workspace_index()
+
+    def _first_empty_workspace_index(self) -> int | None:
+        for index, workspace in enumerate(self._komorebi_workspaces):
+            if self._get_workspace_new_status(workspace) == WORKSPACE_STATUS_EMPTY:
+                return index
+        return None
 
     def _refresh_button_labels(self, workspace_btn: WorkspaceButton) -> None:
         # Workspace names can change dynamically (e.g. via `komorebic workspace-name`).
@@ -523,16 +541,32 @@ class WorkspaceWidget(BaseWidget):
             ws_raw_name = None
 
         ws_name = ws_raw_name or self.config.label_default_name.format(index=ws_index, monitor_index=ws_monitor_index)
-        default_label = self.config.label_workspace_btn.format(
-            name=ws_name, index=ws_index, monitor_index=ws_monitor_index
+        empty_label_template = self.config.label_workspace_empty_btn or self.config.label_workspace_btn
+        default_label = empty_label_template.format(
+            name=ws_name,
+            index=ws_index,
+            monitor_index=ws_monitor_index,
+            window_count=self._get_workspace_window_count(workspace_index),
         )
         active_label = self.config.label_workspace_active_btn.format(
-            name=ws_name, index=ws_index, monitor_index=ws_monitor_index
+            name=ws_name,
+            index=ws_index,
+            monitor_index=ws_monitor_index,
+            window_count=self._get_workspace_window_count(workspace_index),
         )
         populated_label = self.config.label_workspace_populated_btn.format(
-            name=ws_name, index=ws_index, monitor_index=ws_monitor_index
+            name=ws_name,
+            index=ws_index,
+            monitor_index=ws_monitor_index,
+            window_count=self._get_workspace_window_count(workspace_index),
         )
         return default_label, active_label, populated_label
+
+    def _get_workspace_window_count(self, workspace_index: int) -> int:
+        try:
+            return self._curr_num_windows_in_workspaces[workspace_index]
+        except (IndexError, TypeError):
+            return 0
 
     def _try_add_workspace_button(self, workspace_index: int) -> WorkspaceButton:
         workspace_button_indexes = [ws_btn.workspace_index for ws_btn in self._workspace_buttons]

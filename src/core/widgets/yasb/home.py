@@ -5,6 +5,7 @@ import subprocess
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from core.utils.tooltip import set_tooltip
 from core.utils.utilities import PopupWidget
 from core.validation.widgets.yasb.home import HomeConfig, MenuItemConfig
 from core.widgets.base import BaseWidget
@@ -20,6 +21,8 @@ class HomeWidget(BaseWidget):
         self.power_operations = PowerOperations()
         self._init_container()
         self.build_widget_label(self.config.label, None)
+        if self.config.tooltip:
+            set_tooltip(self, self.config.tooltip, delay=400, position="top")
 
         self.register_callback("toggle_menu", self._toggle_menu)
         self.callback_left = self.config.callbacks.on_left

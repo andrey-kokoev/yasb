@@ -22,12 +22,14 @@ class KomorebiWorkspacesConfig(CustomBaseModel):
     label_workspace_btn: str = "{index}"
     label_workspace_active_btn: str = "{index}"
     label_workspace_populated_btn: str = "{index}"
+    label_workspace_empty_btn: str | None = None
     label_default_name: str = ""
     label_float_override: str = "Override Active"
     toggle_workspace_layer: ToggleWorkspaceLayerConfig = ToggleWorkspaceLayerConfig()
     hide_if_offline: bool = False
     label_zero_index: bool = False
     hide_empty_workspaces: bool = False
+    show_one_empty_workspace: bool = False
     app_icons: AppIconsConfig = AppIconsConfig()
     enable_scroll_switching: bool = False
     reverse_scroll_direction: bool = False

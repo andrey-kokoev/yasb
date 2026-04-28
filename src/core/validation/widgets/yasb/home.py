@@ -34,6 +34,7 @@ class CallbacksHomeConfig(CallbacksConfig):
 
 class HomeConfig(CustomBaseModel):
     label: str = "\ue71a"
+    tooltip: str | None = None
     menu_list: list[MenuItemConfig] | None = None
     power_menu: bool = True
     system_menu: bool = True
