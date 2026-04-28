@@ -301,6 +301,16 @@ class WindowsDesktopService(QObject):
         window.move(VirtualDesktop(desktop_number))
 
     @staticmethod
+    def is_window_on_current_desktop(hwnd: int) -> bool:
+        try:
+            app_view = AppView(hwnd=hwnd)
+            if app_view.is_pinned() or app_view.is_app_pinned():
+                return True
+            return app_view.desktop.number == VirtualDesktop.current().number
+        except Exception:
+            return True
+
+    @staticmethod
     def toggle_pin_window(hwnd: int):
         window = AppView(hwnd=hwnd)
         if window.is_pinned():

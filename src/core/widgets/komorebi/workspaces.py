@@ -16,6 +16,7 @@ from core.utils.win32.utils import get_monitor_hwnd, get_process_info
 from core.validation.widgets.komorebi.workspaces import KomorebiWorkspacesConfig
 from core.widgets.base import BaseWidget
 from core.widgets.services.komorebi.client import KomorebiClient
+from core.widgets.services.windows_desktops.service import WindowsDesktopService
 
 try:
     from core.widgets.services.komorebi.event_listener import KomorebiEventListener
@@ -210,6 +211,7 @@ class WorkspaceWidget(BaseWidget):
         self.config = config
         self._event_service = EventService()
         self._komorebic = KomorebiClient()
+        self._windows_desktop_service = WindowsDesktopService()
 
         self._workspace_app_icons_enabled = (
             self.config.app_icons.enabled_populated or self.config.app_icons.enabled_active
@@ -285,6 +287,10 @@ class WorkspaceWidget(BaseWidget):
         self._event_service.register_event(KomorebiEvent.KomorebiConnect, self.k_signal_connect)
         self._event_service.register_event(KomorebiEvent.KomorebiDisconnect, self.k_signal_disconnect)
         self._event_service.register_event(KomorebiEvent.KomorebiUpdate, self.k_signal_update)
+        if self.config.hide_windows_not_on_current_desktop:
+            self._windows_desktop_service.desktop_changed.connect(self._on_windows_desktop_changed)
+            self._windows_desktop_service.desktops_updated.connect(self._on_windows_desktops_updated)
+            self._windows_desktop_service.register_widget(self)
         try:
             self.destroyed.connect(self._on_destroyed)  # type: ignore[attr-defined]
         except Exception:
@@ -295,8 +301,24 @@ class WorkspaceWidget(BaseWidget):
             self._event_service.unregister_event(KomorebiEvent.KomorebiConnect, self.k_signal_connect)
             self._event_service.unregister_event(KomorebiEvent.KomorebiDisconnect, self.k_signal_disconnect)
             self._event_service.unregister_event(KomorebiEvent.KomorebiUpdate, self.k_signal_update)
+            if self.config.hide_windows_not_on_current_desktop:
+                self._windows_desktop_service.desktop_changed.disconnect(self._on_windows_desktop_changed)
+                self._windows_desktop_service.desktops_updated.disconnect(self._on_windows_desktops_updated)
+                self._windows_desktop_service.unregister_widget(self)
         except Exception:
             pass
+
+    def _on_windows_desktop_changed(self, *_args):
+        self._refresh_after_windows_desktop_change()
+
+    def _on_windows_desktops_updated(self, *_args):
+        self._refresh_after_windows_desktop_change()
+
+    def _refresh_after_windows_desktop_change(self):
+        state = self._komorebic.query_state()
+        if self._update_komorebi_state(state):
+            self._add_or_update_buttons()
+            self._event_service.emit_event("workspace_update", "WindowsDesktopChange")
 
     def _reset(self):
         self._komorebi_state = None
@@ -633,7 +655,17 @@ class WorkspaceWidget(BaseWidget):
             windows_in_workspace = [
                 window for window in windows_in_workspace if not self._is_minimized_or_offscreen(window)
             ]
+        if self.config.hide_windows_not_on_current_desktop:
+            windows_in_workspace = [
+                window for window in windows_in_workspace if self._is_on_current_windows_desktop(window)
+            ]
         return windows_in_workspace
+
+    def _is_on_current_windows_desktop(self, window: dict) -> bool:
+        hwnd = window.get("hwnd")
+        if not hwnd:
+            return True
+        return WindowsDesktopService.is_window_on_current_desktop(hwnd)
 
     def _is_minimized_or_offscreen(self, window: dict) -> bool:
         hwnd = window.get("hwnd")
