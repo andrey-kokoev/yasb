@@ -76,10 +76,7 @@ class WorkspaceButton(QPushButton):
         refresh_widget_style(self)
 
     def activate_workspace(self):
-        try:
-            self.komorebic.activate_workspace(self.parent_widget._komorebi_screen["index"], self.workspace_index)
-        except Exception:
-            logging.exception("Failed to focus workspace at index %s", self.workspace_index)
+        self.parent_widget.activate_workspace_button(self)
 
 
 class WorkspaceButtonWithIcons(QFrame):
@@ -193,10 +190,7 @@ class WorkspaceButtonWithIcons(QFrame):
                 self.update_icons(icons={hwnd: pixmap})
 
     def activate_workspace(self):
-        try:
-            self.komorebic.activate_workspace(self.parent_widget._komorebi_screen["index"], self.workspace_index)
-        except Exception:
-            logging.exception("Failed to focus workspace at index %s", self.workspace_index)
+        self.parent_widget.activate_workspace_button(self)
 
 
 class WorkspaceWidget(BaseWidget):
@@ -357,7 +351,7 @@ class WorkspaceWidget(BaseWidget):
                         elif event["type"] in [KomorebiEvent.TitleUpdate.value]:
                             hwnd = event["content"][1]["hwnd"]
                             self._workspace_buttons[i].update_icon_by_hwnd(hwnd)
-                except IndexError, TypeError:
+                except (IndexError, TypeError):
                     pass
 
             if event["type"] == KomorebiEvent.MoveWorkspaceToMonitorNumber.value:
@@ -381,7 +375,7 @@ class WorkspaceWidget(BaseWidget):
                         self._update_button(prev_workspace_button)
                         new_workspace_button = self._workspace_buttons[self._curr_workspace_index]
                         self._update_button(new_workspace_button)
-                    except IndexError, TypeError:
+                    except (IndexError, TypeError):
                         self._add_or_update_buttons()
             elif event["type"] in self._update_buttons_event_watchlist:
                 self._add_or_update_buttons()
@@ -450,6 +444,31 @@ class WorkspaceWidget(BaseWidget):
 
     def _has_active_workspace_index_changed(self):
         return self._prev_workspace_index != self._curr_workspace_index
+
+    def activate_workspace_button(self, workspace_btn: WorkspaceButton) -> None:
+        try:
+            monitor_index = self._get_komorebi_monitor_index()
+            workspace_index = workspace_btn.workspace_index
+            if workspace_btn.status == WORKSPACE_STATUS_EMPTY:
+                self._komorebic.ensure_workspaces(monitor_index, workspace_index + 1, wait=True)
+            self._komorebic.activate_workspace(monitor_index, workspace_index, wait=True)
+            state = self._komorebic.query_state()
+            if self._update_komorebi_state(state):
+                self._add_or_update_buttons()
+                self._event_service.emit_event("workspace_update", "ActivateWorkspaceButton")
+        except Exception:
+            logging.exception("Failed to focus workspace at index %s", workspace_btn.workspace_index)
+
+    def _get_komorebi_monitor_index(self) -> int:
+        try:
+            return int(self._komorebi_screen["index"])
+        except (KeyError, TypeError, ValueError):
+            state = self._komorebic.query_state()
+            if state:
+                focused_monitor = state.get("monitors", {}).get("focused")
+                if focused_monitor is not None:
+                    return int(focused_monitor)
+            raise RuntimeError("Unable to resolve Komorebi monitor index for workspace activation")
 
     def _get_workspace_new_status(self, workspace) -> WorkspaceStatus:
         if self._curr_workspace_index == workspace["index"]:
