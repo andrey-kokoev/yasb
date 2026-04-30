@@ -404,9 +404,14 @@ class AutoHideManager(QObject):
         """Clean up resources"""
         if self._hide_timer:
             self._hide_timer.stop()
+            self._hide_timer.timeout.disconnect()
+            self._hide_timer.deleteLater()
+            self._hide_timer = None
+        self.bar_widget.removeEventFilter(self)
         if self._detection_zone:
             self._detection_zone.hide()
             self._detection_zone.deleteLater()
+            self._detection_zone = None
         self._is_enabled = False
 
         # Restore reserved screen space when autohide is disabled and only if windows_app_bar was enabled
@@ -1125,6 +1130,7 @@ class BarCliManager(QObject):
     def _show_bar_persistently(self) -> None:
         self.bar_widget.show()
         self.bar_widget.raise_()
+        self.bar_widget.activateWindow()
         if self.bar_widget._window_flags["windows_app_bar"]:
             SystrayAppBarHelper.execute_without_systray_interference(self.bar_widget.update_app_bar)
 
@@ -1133,6 +1139,7 @@ class BarCliManager(QObject):
             manager = self.bar_widget._autohide_manager
             self.bar_widget._autohide_manager = None
             manager.cleanup()
+            manager.deleteLater()
 
         # AppBar restoration can move the bar and generate enter/leave events while
         # the click is still unwinding. Reassert visibility after that transition.
