@@ -1122,6 +1122,24 @@ class BarCliManager(QObject):
         super().__init__(parent)
         self.bar_widget = bar_widget
 
+    def _show_bar_persistently(self) -> None:
+        self.bar_widget.show()
+        self.bar_widget.raise_()
+        if self.bar_widget._window_flags["windows_app_bar"]:
+            SystrayAppBarHelper.execute_without_systray_interference(self.bar_widget.update_app_bar)
+
+    def _disable_autohide(self) -> None:
+        if self.bar_widget._autohide_manager:
+            manager = self.bar_widget._autohide_manager
+            self.bar_widget._autohide_manager = None
+            manager.cleanup()
+
+        # AppBar restoration can move the bar and generate enter/leave events while
+        # the click is still unwinding. Reassert visibility after that transition.
+        self._show_bar_persistently()
+        QTimer.singleShot(100, self._show_bar_persistently)
+        QTimer.singleShot(500, self._show_bar_persistently)
+
     def handle(self, action: str, screen_name: str) -> None:
         current_screen_matches = not screen_name or self.bar_widget._target_screen.name() == screen_name
         if not current_screen_matches:
@@ -1155,10 +1173,5 @@ class BarCliManager(QObject):
                     self.bar_widget._autohide_manager = AutoHideManager(self.bar_widget, self.bar_widget)
                 if not self.bar_widget._autohide_manager.is_enabled():
                     self.bar_widget._autohide_manager.setup_autohide()
-            elif self.bar_widget._autohide_manager:
-                self.bar_widget._autohide_manager.cleanup()
-                self.bar_widget._autohide_manager = None
-                if not self.bar_widget.isVisible():
-                    self.bar_widget.show()
-                if self.bar_widget._window_flags["windows_app_bar"]:
-                    SystrayAppBarHelper.execute_without_systray_interference(self.bar_widget.update_app_bar)
+            else:
+                self._disable_autohide()
