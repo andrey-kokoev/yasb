@@ -79,8 +79,17 @@ def process_cli_command(command: str):
     elif base_command == "stop":
         exit_application("Exiting Application from CLI...")
 
-    elif base_command in ["show-bar", "hide-bar", "toggle-bar"]:
+    elif base_command in [
+        "show-bar",
+        "hide-bar",
+        "toggle-bar",
+        "enable-autohide-bar",
+        "disable-autohide-bar",
+        "toggle-autohide-bar",
+    ]:
         action = base_command.split("-")[0]
+        if base_command in ["enable-autohide-bar", "disable-autohide-bar", "toggle-autohide-bar"]:
+            action = base_command.replace("-autohide-bar", "-autohide")
         EventService().emit_event("handle_bar_cli", action, screen_name)
 
 

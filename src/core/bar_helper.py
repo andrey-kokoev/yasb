@@ -1147,3 +1147,18 @@ class BarCliManager(QObject):
                 self.bar_widget.show()
                 if manages_app_bar:
                     SystrayAppBarHelper.execute_without_systray_interference(self.bar_widget.update_app_bar)
+        elif action in ["enable-autohide", "disable-autohide", "toggle-autohide"]:
+            should_enable = action == "enable-autohide" or (action == "toggle-autohide" and not autohide_active)
+
+            if should_enable:
+                if not self.bar_widget._autohide_manager:
+                    self.bar_widget._autohide_manager = AutoHideManager(self.bar_widget, self.bar_widget)
+                if not self.bar_widget._autohide_manager.is_enabled():
+                    self.bar_widget._autohide_manager.setup_autohide()
+            elif self.bar_widget._autohide_manager:
+                self.bar_widget._autohide_manager.cleanup()
+                self.bar_widget._autohide_manager = None
+                if not self.bar_widget.isVisible():
+                    self.bar_widget.show()
+                if self.bar_widget._window_flags["windows_app_bar"]:
+                    SystrayAppBarHelper.execute_without_systray_interference(self.bar_widget.update_app_bar)

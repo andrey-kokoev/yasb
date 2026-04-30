@@ -319,10 +319,17 @@ class BaseWidget(QWidget):
         self._run_callback(self.callback_timer)
 
     def _cb_execute_subprocess(self, cmd: str, *cmd_args: list[str]):
+        cmd = self._expand_callback_arg(cmd)
+        cmd_args = [self._expand_callback_arg(arg) for arg in cmd_args]
         if cmd in function_map:
             function_map[cmd]()
         else:
             subprocess.Popen([cmd, *cmd_args] if cmd_args else [cmd], shell=True)
+
+    def _expand_callback_arg(self, value: str) -> str:
+        if not isinstance(value, str):
+            return value
+        return value.replace("{screen_name}", self.screen_name or "")
 
     def _cb_do_nothing(self):
         pass

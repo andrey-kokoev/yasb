@@ -125,6 +125,9 @@ class CLIHandler:
         - "show-bar [screen]" - Show the bar on a specific screen
         - "hide-bar [screen]" - Hide the bar on a specific screen
         - "toggle-bar [screen]" - Toggle the bar on a specific screen
+        - "enable-autohide-bar [screen]" - Enable bar auto-hide on a specific screen
+        - "disable-autohide-bar [screen]" - Disable bar auto-hide on a specific screen
+        - "toggle-autohide-bar [screen]" - Toggle bar auto-hide on a specific screen
 
         Args:
             command: The command to send
@@ -326,6 +329,42 @@ class CLIHandler:
             help="Screen name (optional)",
         )
 
+        enable_autohide_bar_parser = subparsers.add_parser(
+            "enable-autohide-bar",
+            help="Enable bar auto-hide on a specific screen",
+            prog="yasbc enable-autohide-bar",
+        )
+        enable_autohide_bar_parser.add_argument(
+            "-s",
+            "--screen",
+            type=str,
+            help="Screen name (optional)",
+        )
+
+        disable_autohide_bar_parser = subparsers.add_parser(
+            "disable-autohide-bar",
+            help="Disable bar auto-hide on a specific screen",
+            prog="yasbc disable-autohide-bar",
+        )
+        disable_autohide_bar_parser.add_argument(
+            "-s",
+            "--screen",
+            type=str,
+            help="Screen name (optional)",
+        )
+
+        toggle_autohide_bar_parser = subparsers.add_parser(
+            "toggle-autohide-bar",
+            help="Toggle bar auto-hide on a specific screen",
+            prog="yasbc toggle-autohide-bar",
+        )
+        toggle_autohide_bar_parser.add_argument(
+            "-s",
+            "--screen",
+            type=str,
+            help="Screen name (optional)",
+        )
+
         # Channel management
         set_channel_parser = subparsers.add_parser(
             "set-channel",
@@ -441,6 +480,11 @@ class CLIHandler:
         elif args.command == "toggle-bar":
             screen_arg = f" --screen {args.screen}" if args.screen else ""
             self.send_command_to_application(f"toggle-bar{screen_arg}")
+            sys.exit(0)
+
+        elif args.command in ["enable-autohide-bar", "disable-autohide-bar", "toggle-autohide-bar"]:
+            screen_arg = f" --screen {args.screen}" if args.screen else ""
+            self.send_command_to_application(f"{args.command}{screen_arg}")
             sys.exit(0)
 
         elif args.command == "set-channel":
@@ -681,6 +725,9 @@ class CLIHandler:
                   show-bar                  Show the bar on all or a specific screen
                   hide-bar                  Hide the bar on all or a specific screen
                   toggle-bar                Toggle the bar on all or a specific screen
+                  enable-autohide-bar       Enable bar auto-hide on all or a specific screen
+                  disable-autohide-bar      Disable bar auto-hide on all or a specific screen
+                  toggle-autohide-bar       Toggle bar auto-hide on all or a specific screen
                   set-channel               Switch release channels (stable, dev)
                   update                    Update the application
                   log                       Tail yasb process logs (cancel with Ctrl-C)
