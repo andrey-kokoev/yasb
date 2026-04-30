@@ -212,13 +212,15 @@ class CustomWidget(BaseWidget):
 
     def _cb_execute_subprocess(self, cmd: str, *cmd_args: list[str]):
         # Overrides the default 'exec' callback from BaseWidget to allow for data formatting
+        cmd = self._expand_callback_arg(cmd)
+        cmd_args = [self._expand_callback_arg(arg) for arg in cmd_args]
         if self._exec_data:
             formatted_cmd_args = []
             for cmd_arg in cmd_args:
                 try:
                     formatted_cmd_args.append(cmd_arg.format(data=self._exec_data))
                 except KeyError:
-                    formatted_cmd_args.append(cmd_args)
+                    formatted_cmd_args.append(cmd_arg)
             cmd_args = formatted_cmd_args
         if cmd in function_map:
             function_map[cmd]()
