@@ -477,6 +477,11 @@ class WhkdWidget(BaseWidget):
             if trigger_key in {"h", "j", "k", "l"} and direction in {"left", "down", "up", "right"}:
                 return self._groupable(entry, modifiers, trigger_key, direction, "Move", "komorebic move")
 
+        if command.startswith("komorebic stack "):
+            direction = command.rsplit(" ", 1)[-1]
+            if trigger_key in {"h", "j", "k", "l"} and direction in {"left", "down", "up", "right"}:
+                return self._groupable(entry, modifiers, trigger_key, direction, "Stack", "komorebic stack")
+
         if command.startswith("komorebic cycle-move-to-monitor "):
             target = command.rsplit(" ", 1)[-1]
             if trigger_key in {"h", "l"} and target in {"previous", "next"}:
