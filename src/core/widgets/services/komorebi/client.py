@@ -1,6 +1,7 @@
 import json
 import logging
 import subprocess
+from pathlib import Path
 
 
 def add_index(dictionary: dict, dictionary_index: int) -> dict:
@@ -16,16 +17,27 @@ class KomorebiClient:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, komorebic_path: str = "komorebic.exe", timeout_secs: float = 0.5):
+    def __init__(self, komorebic_path: str = "komorebic.exe", timeout_secs: float = 2.0):
         if hasattr(self, "_komorebi_initialized"):
             return
         self._komorebi_initialized = True
 
         super().__init__()
         self._timeout_secs = timeout_secs
-        self._komorebic_path = komorebic_path
+        self._komorebic_path = self._resolve_komorebic_path(komorebic_path)
         self._previous_poll_offline = False
         self._previous_mouse_follows_focus = False
+
+    @staticmethod
+    def _resolve_komorebic_path(komorebic_path: str) -> str:
+        if komorebic_path.lower() not in {"komorebic", "komorebic.exe"}:
+            return komorebic_path
+
+        scoop_current = Path.home() / "scoop" / "apps" / "komorebi" / "current" / "komorebic.exe"
+        if scoop_current.exists():
+            return str(scoop_current)
+
+        return komorebic_path
 
     def query_state(self) -> dict | None:
         try:
@@ -34,7 +46,7 @@ class KomorebiClient:
                 [self._komorebic_path, "state"],
                 timeout=self._timeout_secs,
                 stderr=subprocess.PIPE,
-                shell=True,
+                shell=False,
             )
             return json.loads(output)
         except subprocess.TimeoutExpired:
@@ -208,7 +220,7 @@ class KomorebiClient:
 
     def wait_until_subscribed_to_pipe(self, pipe_name: str):
         proc = subprocess.Popen(
-            [self._komorebic_path, "subscribe", pipe_name], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            [self._komorebic_path, "subscribe", pipe_name], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         _stdout, stderr = proc.communicate()
 

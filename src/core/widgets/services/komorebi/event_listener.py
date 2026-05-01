@@ -123,6 +123,16 @@ class KomorebiEventListener(QThread):
             self.event_service.emit_event(KomorebiEvent[event["type"]], event, state)
 
     def _wait_until_komorebi_online(self):
+        state = self._komorebic.query_state()
+        while self._app_running and state is None:
+            logging.error(
+                "Failed to retrieve komorebi state before starting event listener: None returned. "
+                "Retrying in 2 second... Is komorebi online and its binaries added to $PATH?"
+            )
+            if self._stop_event.wait(2):
+                return
+            state = self._komorebic.query_state()
+
         logging.debug("Waiting for Komorebi to subscribe to named pipe %s", self.pipe_name)
         stderr, proc = self._komorebic.wait_until_subscribed_to_pipe(self.pipe_name)
 
@@ -145,15 +155,5 @@ class KomorebiEventListener(QThread):
 
         win32pipe.ConnectNamedPipe(self.pipe, None)
         logging.info("Komorebi connected to named pipe: %s", self.pipe_name)
-        state = self._komorebic.query_state()
-
-        while self._app_running and state is None:
-            logging.error(
-                "Failed to retrieve komorebi state before starting event listener: None returned. "
-                "Retrying in 2 second... Is komorebi online and its binaries added to $PATH?"
-            )
-            if self._stop_event.wait(2):
-                return
-            state = self._komorebic.query_state()
 
         self.event_service.emit_event(KomorebiEvent.KomorebiConnect, state)
