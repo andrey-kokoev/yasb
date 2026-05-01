@@ -4,12 +4,55 @@ import subprocess
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import QPushButton, QSizePolicy
+from PyQt6.QtWidgets import QApplication, QPushButton, QSizePolicy
 
 from core.utils.tooltip import set_tooltip
 from core.utils.utilities import refresh_widget_style
 from core.validation.widgets.yasb.operator_workspaces import OperatorWorkspacesConfig
 from core.widgets.base import BaseWidget
+
+
+def _normalize_monitor_name(value: str | None) -> str:
+    return str(value or "").replace("\\", "").replace(".", "").upper()
+
+
+def _monitor_scope_signature(workspace: dict) -> tuple:
+    scope = workspace.get("monitor_scope") or {}
+    return (
+        str(scope.get("kind") or "all_monitors"),
+        str(scope.get("monitor_role") or ""),
+        str(scope.get("observed_monitor_name") or ""),
+        str(scope.get("komorebi_monitor_index") or ""),
+    )
+
+
+def _screen_matches_monitor_scope(
+    scope: dict | None,
+    screen_name: str | None,
+    screen_role: str | None,
+    left_to_right_index: int | None,
+) -> bool:
+    scope = scope or {}
+    if str(scope.get("kind") or "all_monitors") != "single_monitor":
+        return True
+
+    observed_monitor_name = _normalize_monitor_name(scope.get("observed_monitor_name"))
+    normalized_screen_name = _normalize_monitor_name(screen_name)
+    if observed_monitor_name and normalized_screen_name and observed_monitor_name == normalized_screen_name:
+        return True
+
+    komorebi_monitor_index = scope.get("komorebi_monitor_index")
+    if komorebi_monitor_index is not None and left_to_right_index is not None:
+        try:
+            return int(komorebi_monitor_index) == int(left_to_right_index)
+        except (TypeError, ValueError):
+            pass
+
+    monitor_role = str(scope.get("monitor_role") or "")
+    if monitor_role and screen_role:
+        return monitor_role == screen_role
+
+    return False
 
 
 class OperatorWorkspaceButton(QPushButton):
@@ -82,11 +125,13 @@ class OperatorWorkspacesWidget(BaseWidget):
                 active_workspace_id = str(state.get("active_workspace_id") or (workspace_ids[0] if workspace_ids else ""))
             signature = (
                 active_workspace_id,
+                self._screen_context_signature(),
                 tuple(
                     (
                         str(workspace.get("workspace_id") or ""),
                         str(workspace.get("display_name") or ""),
                         len(workspace.get("members") or []),
+                        _monitor_scope_signature(workspace),
                     )
                     for workspace in workspaces
                 ),
@@ -160,7 +205,7 @@ class OperatorWorkspacesWidget(BaseWidget):
             workspace_id = str(workspace.get("workspace_id") or "")
             if not workspace_id:
                 continue
-            active = workspace_id == active_workspace_id
+            active = workspace_id == active_workspace_id and self._workspace_matches_current_screen(workspace)
             button = self._buttons.get(workspace_id)
             if button is None:
                 button = OperatorWorkspaceButton(workspace, active, self)
@@ -177,6 +222,47 @@ class OperatorWorkspacesWidget(BaseWidget):
             classes.append(f"button-{index}")
             button.setProperty("class", " ".join(classes))
             refresh_widget_style(button)
+
+    def _workspace_matches_current_screen(self, workspace: dict) -> bool:
+        screen_name, screen_role, left_to_right_index = self._screen_context_signature()
+        return _screen_matches_monitor_scope(
+            workspace.get("monitor_scope"),
+            screen_name,
+            screen_role,
+            left_to_right_index,
+        )
+
+    def _screen_context_signature(self) -> tuple[str, str | None, int | None]:
+        screen = self._current_screen()
+        if screen is None:
+            return (str(self.screen_name or ""), None, None)
+
+        return (
+            str(self.screen_name or screen.name() or ""),
+            self._screen_monitor_role(screen),
+            self._screen_left_to_right_index(screen),
+        )
+
+    def _current_screen(self):
+        for screen in QApplication.screens():
+            if self.screen_name and screen.name() == self.screen_name:
+                return screen
+        return self.screen()
+
+    def _screen_monitor_role(self, screen) -> str:
+        primary = QApplication.primaryScreen()
+        if primary is None or screen == primary:
+            return "right_or_primary"
+        if screen.geometry().center().x() < primary.geometry().center().x():
+            return "left_or_secondary"
+        return "right_or_primary"
+
+    def _screen_left_to_right_index(self, screen) -> int | None:
+        screens = sorted(QApplication.screens(), key=lambda item: item.geometry().center().x())
+        for index, candidate in enumerate(screens):
+            if candidate == screen:
+                return index
+        return None
 
     @staticmethod
     def _load_json(path: str) -> dict:
