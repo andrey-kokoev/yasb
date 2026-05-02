@@ -26,6 +26,27 @@ def _monitor_scope_signature(workspace: dict) -> tuple:
     )
 
 
+def _monitor_scope_active_keys(scope: dict | None) -> list[str]:
+    scope = scope or {}
+    if str(scope.get("kind") or "all_monitors") != "single_monitor":
+        return []
+
+    keys = []
+    observed_monitor_name = str(scope.get("observed_monitor_name") or "")
+    if observed_monitor_name:
+        keys.append(observed_monitor_name)
+
+    monitor_role = str(scope.get("monitor_role") or "")
+    if monitor_role:
+        keys.append(monitor_role)
+
+    komorebi_monitor_index = scope.get("komorebi_monitor_index")
+    if komorebi_monitor_index is not None:
+        keys.append(f"komorebi_monitor_index:{komorebi_monitor_index}")
+
+    return list(dict.fromkeys(keys))
+
+
 def _screen_matches_monitor_scope(
     scope: dict | None,
     screen_name: str | None,
@@ -53,6 +74,33 @@ def _screen_matches_monitor_scope(
         return monitor_role == screen_role
 
     return False
+
+
+def _active_workspace_id_for_screen(
+    workspaces: list[dict],
+    global_active_workspace_id: str,
+    active_workspace_by_monitor: dict | None,
+    screen_name: str | None,
+    screen_role: str | None,
+    left_to_right_index: int | None,
+) -> str:
+    active_workspace_by_monitor = active_workspace_by_monitor or {}
+    for workspace in workspaces:
+        workspace_id = str(workspace.get("workspace_id") or "")
+        if not workspace_id:
+            continue
+        if not _screen_matches_monitor_scope(
+            workspace.get("monitor_scope"),
+            screen_name,
+            screen_role,
+            left_to_right_index,
+        ):
+            continue
+        for key in _monitor_scope_active_keys(workspace.get("monitor_scope")):
+            if active_workspace_by_monitor.get(key) == workspace_id:
+                return workspace_id
+
+    return global_active_workspace_id
 
 
 class OperatorWorkspaceButton(QPushButton):
@@ -119,12 +167,21 @@ class OperatorWorkspacesWidget(BaseWidget):
         try:
             state = self._load_json(self.config.workspace_state_path)
             workspaces = state.get("workspaces") or []
-            active_workspace_id = self._active_workspace_id(state)
+            projection = self._selector_projection_for_screen(state, workspaces)
+            if projection is None:
+                active_workspace_id, active_signature = self._active_workspace_selection(state, workspaces)
+                visible_workspaces = [
+                    workspace for workspace in workspaces if self._workspace_matches_current_screen(workspace)
+                ]
+            else:
+                visible_workspaces, active_workspace_id, active_signature = projection
+
             workspace_ids = [str(workspace.get("workspace_id") or "") for workspace in workspaces]
             if active_workspace_id not in workspace_ids:
                 active_workspace_id = str(state.get("active_workspace_id") or (workspace_ids[0] if workspace_ids else ""))
             signature = (
                 active_workspace_id,
+                active_signature,
                 self._screen_context_signature(),
                 tuple(
                     (
@@ -139,8 +196,8 @@ class OperatorWorkspacesWidget(BaseWidget):
             if signature == self._last_signature:
                 return
             self._last_signature = signature
-            self._sync_buttons(workspaces, active_workspace_id)
-            self.setVisible(bool(workspaces))
+            self._sync_buttons(visible_workspaces, active_workspace_id)
+            self.setVisible(bool(visible_workspaces))
         except Exception:
             logging.exception("Failed to refresh Narada operator workspaces")
             self.setVisible(False)
@@ -149,25 +206,34 @@ class OperatorWorkspacesWidget(BaseWidget):
         if not workspace_id:
             return
         try:
+            screen_name, screen_role, left_to_right_index = self._screen_context_signature()
+            args = [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                self.config.switch_script_path,
+                "-UserSiteRoot",
+                self.config.user_site_root,
+                "-PcSiteRoot",
+                self.config.pc_site_root,
+                "-WorkspaceId",
+                workspace_id,
+                "-Apply",
+                "-MutatingAuthorized",
+                self.config.mutating_authorized,
+                "-PassThru",
+            ]
+            if screen_name:
+                args.extend(["-SelectorMonitorName", screen_name])
+            if screen_role:
+                args.extend(["-SelectorMonitorRole", screen_role])
+            if left_to_right_index is not None:
+                args.extend(["-SelectorLeftToRightIndex", str(left_to_right_index)])
+
             subprocess.Popen(
-                [
-                    "powershell.exe",
-                    "-NoProfile",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    self.config.switch_script_path,
-                    "-UserSiteRoot",
-                    self.config.user_site_root,
-                    "-PcSiteRoot",
-                    self.config.pc_site_root,
-                    "-WorkspaceId",
-                    workspace_id,
-                    "-Apply",
-                    "-MutatingAuthorized",
-                    self.config.mutating_authorized,
-                    "-PassThru",
-                ],
+                args,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 creationflags=subprocess.CREATE_NO_WINDOW,
@@ -176,22 +242,87 @@ class OperatorWorkspacesWidget(BaseWidget):
         except Exception:
             logging.exception("Failed to switch Narada operator workspace to %s", workspace_id)
 
-    def _active_workspace_id(self, state: dict) -> str:
+    def _active_workspace_selection(self, state: dict, workspaces: list[dict]) -> tuple[str, tuple]:
         runtime_path = self.config.runtime_state_path
         authority_active = str(state.get("active_workspace_id") or "")
+        authority_map = state.get("active_workspace_by_monitor") or {}
+        active = authority_active
+        active_by_monitor = authority_map
         if runtime_path:
             try:
                 runtime = self._load_json(runtime_path)
                 authority_updated_at = str(state.get("updated_at") or "")
                 runtime_updated_at = str(runtime.get("updated_at") or "")
                 if authority_updated_at and runtime_updated_at and authority_updated_at > runtime_updated_at:
-                    return authority_active
-                active = str(runtime.get("active_workspace_id") or "")
-                if active:
-                    return active
+                    active = authority_active
+                    active_by_monitor = authority_map
+                else:
+                    runtime_active = str(runtime.get("active_workspace_id") or "")
+                    active = runtime_active or authority_active
+                    active_by_monitor = runtime.get("active_workspace_by_monitor") or authority_map
             except Exception:
                 pass
-        return authority_active
+
+        screen_name, screen_role, left_to_right_index = self._screen_context_signature()
+        active_for_screen = _active_workspace_id_for_screen(
+            workspaces,
+            active,
+            active_by_monitor,
+            screen_name,
+            screen_role,
+            left_to_right_index,
+        )
+        active_signature = (
+            active,
+            tuple(sorted((str(key), str(value)) for key, value in active_by_monitor.items())),
+        )
+        return active_for_screen, active_signature
+
+    def _selector_projection_for_screen(self, state: dict, workspaces: list[dict]) -> tuple[list[dict], str, tuple] | None:
+        path = self.config.selector_projection_path
+        if not path:
+            return None
+        projection_path = Path(path)
+        if not projection_path.exists():
+            return None
+
+        projection = self._load_json(str(projection_path))
+        selectors = projection.get("selectors") or []
+        screen_name, screen_role, left_to_right_index = self._screen_context_signature()
+        selector = None
+        for candidate in selectors:
+            if _screen_matches_monitor_scope(
+                candidate.get("selector_scope"),
+                screen_name,
+                screen_role,
+                left_to_right_index,
+            ):
+                selector = candidate
+                break
+        if selector is None:
+            return ([], "", ("selector_projection", str(projection.get("generated_at") or ""), "no_selector"))
+
+        workspace_by_id = {str(workspace.get("workspace_id") or ""): workspace for workspace in workspaces}
+        visible = []
+        projected_ids = []
+        for projected_workspace in selector.get("workspaces") or []:
+            workspace_id = str(projected_workspace.get("workspace_id") or "")
+            if not workspace_id:
+                continue
+            projected_ids.append(workspace_id)
+            workspace = workspace_by_id.get(workspace_id)
+            if workspace is not None:
+                visible.append(workspace)
+
+        active_workspace_id = str(selector.get("active_workspace_id") or "")
+        active_signature = (
+            "selector_projection",
+            str(projection.get("generated_at") or ""),
+            str(selector.get("selector_id") or ""),
+            tuple(projected_ids),
+            active_workspace_id,
+        )
+        return (visible, active_workspace_id, active_signature)
 
     def _sync_buttons(self, workspaces: list[dict], active_workspace_id: str):
         workspace_ids = [str(workspace.get("workspace_id") or "") for workspace in workspaces]
@@ -205,7 +336,7 @@ class OperatorWorkspacesWidget(BaseWidget):
             workspace_id = str(workspace.get("workspace_id") or "")
             if not workspace_id:
                 continue
-            active = workspace_id == active_workspace_id and self._workspace_matches_current_screen(workspace)
+            active = workspace_id == active_workspace_id
             button = self._buttons.get(workspace_id)
             if button is None:
                 button = OperatorWorkspaceButton(workspace, active, self)

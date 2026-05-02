@@ -4,6 +4,7 @@ from core.validation.widgets.base_model import CustomBaseModel, KeybindingConfig
 class OperatorWorkspacesConfig(CustomBaseModel):
     workspace_state_path: str
     runtime_state_path: str | None = None
+    selector_projection_path: str | None = None
     switch_script_path: str
     user_site_root: str
     pc_site_root: str
