@@ -155,6 +155,29 @@ KOMOREBI_WIDGET: dict = {
     },
 }
 
+OPERATOR_WORKSPACES_WIDGET: dict = {
+    "operator_workspaces": {
+        "placement": {
+            "operator_workspaces": ("left", 21),
+        },
+        "config": {
+            "operator_workspaces": {
+                "type": "yasb.operator_workspaces.OperatorWorkspacesWidget",
+                "options": {
+                    "label_workspace_btn": "{display_name}",
+                    "label_workspace_active_btn": "{display_name}",
+                    "label_max_length": 18,
+                    "launch_button_label": "+",
+                    "tooltip": "Narada operator workspace: {display_name}",
+                    "launch_button_tooltip": "Launch dormant workspaces ({dormant_count})",
+                    "launch_button_tooltip_empty": "No dormant workspaces available",
+                    "mutating_authorized": "yasb.operator-workspace",
+                },
+            },
+        },
+    },
+}
+
 GLAZEWM_WIDGET: dict = {
     "glazewm": {
         "placement": {
@@ -567,6 +590,7 @@ MEDIA_WIDGET: dict = {
 WIDGETS_CONFIG: dict[str, dict] = {
     **BASE_WIDGET,
     **KOMOREBI_WIDGET,
+    **OPERATOR_WORKSPACES_WIDGET,
     **GLAZEWM_WIDGET,
     **WINDOWS_DESKTOPS_WIDGET,
     **CPU_WIDGET,

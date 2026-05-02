@@ -6,6 +6,7 @@ from core.setup.widgets_styles import WIDGET_STYLES
 
 WINDOW_MANAGER_GROUPS: tuple[tuple[str, str, str], ...] = (
     ("komorebi", "Komorebi", "Workspace switcher with per-workspace app icons and scroll support"),
+    ("operator_workspaces", "Operator Workspaces", "Narada operator workspaces with live tabs and launch inventory"),
     ("glazewm", "GlazeWM", "Workspace switcher - click to switch, scroll to cycle workspaces"),
     ("windows_desktops", "Virtual Desktops", "Native Windows desktops - switch, rename, create and delete"),
 )

@@ -4,16 +4,66 @@ import subprocess
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import QApplication, QPushButton, QSizePolicy
+from PyQt6.QtWidgets import QApplication, QPushButton, QSizePolicy, QVBoxLayout
 
 from core.utils.tooltip import set_tooltip
-from core.utils.utilities import refresh_widget_style
+from core.utils.utilities import PopupWidget, refresh_widget_style
 from core.validation.widgets.yasb.operator_workspaces import OperatorWorkspacesConfig
 from core.widgets.base import BaseWidget
 
 
 def _normalize_monitor_name(value: str | None) -> str:
     return str(value or "").replace("\\", "").replace(".", "").upper()
+
+
+def _workspace_member_count(workspace: dict) -> int:
+    member_count = workspace.get("member_count")
+    if member_count is not None:
+        try:
+            return max(0, int(member_count))
+        except (TypeError, ValueError):
+            pass
+    members = workspace.get("members") or []
+    return len(members) if isinstance(members, list) else 0
+
+
+def _workspace_surface_state(workspace: dict) -> str:
+    state = str(
+        workspace.get("surface_state")
+        or workspace.get("embodiment_state")
+        or workspace.get("lifecycle_state")
+        or ""
+    ).strip().lower()
+    if state in {"running", "inhabited", "live"}:
+        return "running"
+    if state in {"launchable", "dormant", "inactive"}:
+        return "launchable"
+    if state in {"disabled", "unavailable", "absent"}:
+        return "disabled"
+    return ""
+
+
+def _workspace_is_running(workspace: dict) -> bool:
+    state = _workspace_surface_state(workspace)
+    if state:
+        return state == "running"
+    return _workspace_member_count(workspace) > 0
+
+
+def _split_workspaces_by_activity(workspaces: list[dict]) -> tuple[list[dict], list[dict]]:
+    live_workspaces: list[dict] = []
+    launchable_workspaces: list[dict] = []
+    for workspace in workspaces:
+        state = _workspace_surface_state(workspace)
+        if state == "running":
+            live_workspaces.append(workspace)
+        elif state == "launchable":
+            launchable_workspaces.append(workspace)
+        elif _workspace_is_running(workspace):
+            live_workspaces.append(workspace)
+        else:
+            launchable_workspaces.append(workspace)
+    return live_workspaces, launchable_workspaces
 
 
 def _monitor_scope_signature(workspace: dict) -> tuple:
@@ -129,24 +179,56 @@ class OperatorWorkspaceButton(QPushButton):
         text = template.format(
             workspace_id=self.workspace_id,
             display_name=display_name,
-            member_count=len(workspace.get("members") or []),
+            member_count=_workspace_member_count(workspace),
         )
         max_len = self.parent_widget.config.label_max_length
         if max_len and len(text) > max_len:
             text = text[: max(1, max_len - 1)] + "..."
         self.setText(text)
-        self.setProperty("class", "ws-btn active" if active else "ws-btn")
+        classes = ["ws-btn"]
+        if active:
+            classes.append("active")
+        if _workspace_is_running(workspace):
+            classes.append("populated")
+        self.setProperty("class", " ".join(classes))
         if self.parent_widget.config.tooltip:
             set_tooltip(
                 self,
                 self.parent_widget.config.tooltip.format(
                     workspace_id=self.workspace_id,
                     display_name=display_name,
-                    member_count=len(workspace.get("members") or []),
+                    member_count=_workspace_member_count(workspace),
                 ),
                 delay=400,
                 position="top",
             )
+        refresh_widget_style(self)
+
+
+class OperatorWorkspaceLaunchButton(QPushButton):
+    def __init__(self, parent: "OperatorWorkspacesWidget"):
+        super().__init__(parent)
+        self.parent_widget = parent
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setProperty("class", "ws-btn launch-btn")
+        self.setText(self.parent_widget.config.launch_button_label)
+        self.clicked.connect(self._on_clicked)
+        refresh_widget_style(self)
+
+    def _on_clicked(self):
+        self.parent_widget.toggle_launch_inventory()
+
+    def update_state(self, has_launchable: bool):
+        self.setVisible(has_launchable)
+        if self.parent_widget.config.launch_button_tooltip:
+            if has_launchable:
+                tooltip = self.parent_widget.config.launch_button_tooltip.format(
+                    dormant_count=len(self.parent_widget._launchable_workspaces)
+                )
+            else:
+                tooltip = self.parent_widget.config.launch_button_tooltip_empty
+            set_tooltip(self, tooltip, delay=400, position="top")
         refresh_widget_style(self)
 
 
@@ -157,6 +239,9 @@ class OperatorWorkspacesWidget(BaseWidget):
         super().__init__(config.update_interval, class_name="operator-workspaces")
         self.config = config
         self._buttons: dict[str, OperatorWorkspaceButton] = {}
+        self._launch_button: OperatorWorkspaceLaunchButton | None = None
+        self._launch_popup: PopupWidget | None = None
+        self._launchable_workspaces: list[dict] = []
         self._last_signature: tuple | None = None
         self._init_container()
         self.callback_timer = "refresh_workspaces"
@@ -170,15 +255,14 @@ class OperatorWorkspacesWidget(BaseWidget):
             projection = self._selector_projection_for_screen(state, workspaces)
             if projection is None:
                 active_workspace_id, active_signature = self._active_workspace_selection(state, workspaces)
-                visible_workspaces = [
-                    workspace for workspace in workspaces if self._workspace_matches_current_screen(workspace)
-                ]
+                projected_workspaces = [workspace for workspace in workspaces if self._workspace_matches_current_screen(workspace)]
             else:
-                visible_workspaces, active_workspace_id, active_signature = projection
+                projected_workspaces, active_workspace_id, active_signature = projection
 
             workspace_ids = [str(workspace.get("workspace_id") or "") for workspace in workspaces]
             if active_workspace_id not in workspace_ids:
                 active_workspace_id = str(state.get("active_workspace_id") or (workspace_ids[0] if workspace_ids else ""))
+            live_workspaces, launchable_workspaces = _split_workspaces_by_activity(projected_workspaces)
             signature = (
                 active_workspace_id,
                 active_signature,
@@ -187,17 +271,21 @@ class OperatorWorkspacesWidget(BaseWidget):
                     (
                         str(workspace.get("workspace_id") or ""),
                         str(workspace.get("display_name") or ""),
-                        len(workspace.get("members") or []),
+                        _workspace_member_count(workspace),
                         _monitor_scope_signature(workspace),
                     )
                     for workspace in workspaces
                 ),
+                tuple(str(workspace.get("workspace_id") or "") for workspace in live_workspaces),
+                tuple(str(workspace.get("workspace_id") or "") for workspace in launchable_workspaces),
             )
             if signature == self._last_signature:
                 return
             self._last_signature = signature
-            self._sync_buttons(visible_workspaces, active_workspace_id)
-            self.setVisible(bool(visible_workspaces))
+            self._launchable_workspaces = launchable_workspaces
+            self._sync_buttons(live_workspaces, active_workspace_id)
+            self._sync_launch_button(bool(launchable_workspaces))
+            self.setVisible(bool(live_workspaces) or bool(launchable_workspaces))
         except Exception:
             logging.exception("Failed to refresh Narada operator workspaces")
             self.setVisible(False)
@@ -241,6 +329,59 @@ class OperatorWorkspacesWidget(BaseWidget):
             QTimer.singleShot(250, self.refresh_workspaces)
         except Exception:
             logging.exception("Failed to switch Narada operator workspace to %s", workspace_id)
+
+    def toggle_launch_inventory(self):
+        if self._launch_popup and self._launch_popup.isVisible():
+            self._launch_popup.hide_animated()
+            return
+        self._show_launch_inventory()
+
+    def _show_launch_inventory(self):
+        if not self._launchable_workspaces:
+            return
+        popup = PopupWidget(
+            self,
+            blur=True,
+            round_corners=True,
+            round_corners_type="normal",
+            border_color="System",
+        )
+        self._launch_popup = popup
+        popup.setProperty("class", "operator-workspaces launch-menu")
+
+        main_layout = QVBoxLayout(popup)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        for workspace in self._launchable_workspaces:
+            workspace_id = str(workspace.get("workspace_id") or "")
+            display_name = str(workspace.get("display_name") or workspace_id)
+            item = QPushButton(f"{display_name} ({_workspace_member_count(workspace)})", popup)
+            item.setProperty("class", "menu-item ws-btn launch-item")
+            item.setCursor(Qt.CursorShape.PointingHandCursor)
+            item.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+            def handler(_checked=False, selected_id=workspace_id):
+                self.activate_workspace(selected_id)
+                if self._launch_popup and self._launch_popup.isVisible():
+                    self._launch_popup.hide_animated()
+
+            item.clicked.connect(handler)
+            main_layout.addWidget(item)
+
+        def on_popup_destroyed(*_args, popup_ref=popup):
+            if self._launch_popup is popup_ref:
+                self._launch_popup = None
+
+        popup.destroyed.connect(on_popup_destroyed)
+        popup.adjustSize()
+        popup.setPosition(
+            alignment="right",
+            direction="down",
+            offset_left=0,
+            offset_top=6,
+        )
+        popup.show()
 
     def _active_workspace_selection(self, state: dict, workspaces: list[dict]) -> tuple[str, tuple]:
         runtime_path = self.config.runtime_state_path
@@ -347,8 +488,17 @@ class OperatorWorkspacesWidget(BaseWidget):
 
         self._renumber_visible_buttons()
 
+    def _sync_launch_button(self, has_launchable: bool):
+        if self._launch_button is None:
+            self._launch_button = OperatorWorkspaceLaunchButton(self)
+            self._widget_container_layout.addWidget(self._launch_button)
+        self._launch_button.update_state(has_launchable)
+
     def _renumber_visible_buttons(self):
-        for index, button in enumerate(self._buttons.values(), start=1):
+        ordered_buttons = list(self._buttons.values())
+        if self._launch_button and self._launch_button.isVisible():
+            ordered_buttons.append(self._launch_button)
+        for index, button in enumerate(ordered_buttons, start=1):
             classes = [part for part in str(button.property("class") or "").split() if not part.startswith("button-")]
             classes.append(f"button-{index}")
             button.setProperty("class", " ".join(classes))

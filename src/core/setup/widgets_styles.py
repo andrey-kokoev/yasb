@@ -384,6 +384,45 @@ KOMOREBI_WIDGET_STYLE: str = """\
     background-color: var(--yasb-accent);
 }"""
 
+OPERATOR_WORKSPACES_WIDGET_STYLE: str = """\
+/* Operator Workspace */
+.operator-workspaces .ws-btn {
+    color: var(--yasb-fg);
+    border: none;
+    margin: 0 2px;
+    padding: 2px 8px;
+    outline: none;
+    font-family: var(--system-font);
+    font-weight: 600;
+    border-radius: 3px;
+}
+.operator-workspaces .ws-btn.populated {
+    background-color: var(--yasb-surface-alt);
+}
+.operator-workspaces .ws-btn.active {
+    color: var(--yasb-accent-fg);
+    background-color: var(--yasb-accent);
+}
+.operator-workspaces .launch-btn {
+    min-width: 28px;
+}
+.operator-workspaces.launch-menu {
+    background-color: var(--yasb-popup-bg);
+    min-width: 240px;
+}
+.operator-workspaces.launch-menu .menu-item {
+    text-align: left;
+    padding: 6px 12px;
+    background-color: transparent;
+}
+.operator-workspaces.launch-menu .menu-item:hover {
+    background-color: var(--yasb-white-alpha-10);
+}
+.operator-workspaces.launch-menu .menu-item.launch-item {
+    min-width: 220px;
+}
+"""
+
 GLAZEWM_WIDGET_STYLE: str = """\
 /* Glaze Workspace */
 .glazewm-workspaces .ws-btn {
@@ -1401,6 +1440,7 @@ MEDIA_WIDGET_STYLE: str = """\
 WIDGET_STYLES: dict[str, str] = {
     "base": BASE_WIDGET_STYLE,
     "komorebi": KOMOREBI_WIDGET_STYLE,
+    "operator_workspaces": OPERATOR_WORKSPACES_WIDGET_STYLE,
     "glazewm": GLAZEWM_WIDGET_STYLE,
     "windows_desktops": WINDOWS_DESKTOPS_WIDGET_STYLE,
     "cpu": CPU_WIDGET_STYLE,

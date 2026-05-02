@@ -457,12 +457,9 @@ class CLIHandler:
             sys.exit(0)
 
         elif args.command == "reload":
-            if is_process_running("yasb.exe"):
-                if not args.silent:
-                    print("Reload YASB...")
-                self.send_command_to_application("reload")
-            else:
-                print("YASB is not running. Reload aborted.")
+            if not args.silent:
+                print("Reload YASB...")
+            self.send_command_to_application("reload")
             sys.exit(0)
 
         elif args.command == "show-bar":

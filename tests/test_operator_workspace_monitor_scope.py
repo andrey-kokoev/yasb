@@ -8,6 +8,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from core.widgets.yasb.operator_workspaces import (  # noqa: E402
     _active_workspace_id_for_screen,
     _screen_matches_monitor_scope,
+    _split_workspaces_by_activity,
+    _workspace_is_running,
 )
 
 
@@ -107,10 +109,29 @@ def test_active_workspace_can_be_different_per_monitor():
     )
 
 
+def test_workspace_activity_split_uses_member_count():
+    workspaces = [
+        {"workspace_id": "live", "surface_state": "running", "member_count": 0},
+        {"workspace_id": "dormant", "surface_state": "launchable", "member_count": 2},
+        {"workspace_id": "compat", "member_count": 1},
+        {"workspace_id": "fallback", "members": [{}]},
+    ]
+
+    assert _workspace_is_running(workspaces[0])
+    assert not _workspace_is_running(workspaces[1])
+    assert _workspace_is_running(workspaces[2])
+    assert _workspace_is_running(workspaces[3])
+
+    live, dormant = _split_workspaces_by_activity(workspaces)
+    assert [workspace["workspace_id"] for workspace in live] == ["live", "compat", "fallback"]
+    assert [workspace["workspace_id"] for workspace in dormant] == ["dormant"]
+
+
 if __name__ == "__main__":
     test_all_monitor_workspace_highlights_on_every_screen()
     test_single_monitor_workspace_matches_left_to_right_index()
     test_single_monitor_workspace_matches_observed_display_name_when_available()
     test_single_monitor_workspace_falls_back_to_role()
     test_active_workspace_can_be_different_per_monitor()
+    test_workspace_activity_split_uses_member_count()
     print("operator workspace monitor scope tests passed")

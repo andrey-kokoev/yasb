@@ -12,6 +12,9 @@ class OperatorWorkspacesConfig(CustomBaseModel):
     label_workspace_active_btn: str = "{display_name}"
     label_max_length: int = 18
     tooltip: str | None = "Narada operator workspace: {display_name}"
+    launch_button_label: str = "+"
+    launch_button_tooltip: str | None = "Launch dormant workspaces ({dormant_count})"
+    launch_button_tooltip_empty: str | None = "No dormant workspaces available"
     update_interval: int = 1000
     mutating_authorized: str = "yasb.operator-workspace"
     keybindings: list[KeybindingConfig] = []
