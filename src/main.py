@@ -1,7 +1,9 @@
 import asyncio
 import contextlib
 import ctypes
+import hashlib
 import logging
+import os
 import sys
 import time
 from sys import argv
@@ -20,6 +22,7 @@ from core.utils.controller import start_cli_server
 from core.utils.update_service import get_update_service, start_update_checker
 from core.watcher import create_observer
 from env import load_env, set_font_engine
+from settings import DEFAULT_CONFIG_DIRECTORY
 
 
 @contextlib.contextmanager
@@ -86,21 +89,27 @@ def single_instance_lock(name: str = "yasb_reborn"):
         ctypes.windll.kernel32.CloseHandle(mutex)
 
 
+def _instance_lock_name() -> str:
+    config_root = os.path.normcase(os.path.normpath(DEFAULT_CONFIG_DIRECTORY))
+    digest = hashlib.sha1(config_root.encode("utf-8")).hexdigest()[:12]
+    return f"yasb_reborn_{digest}"
+
+
 def main():
     """Main entry point"""
     app = YASBApplication(argv)
 
-    if is_first_run() and not run_setup_wizard():
-        return
+    if not os.getenv("YASB_SKIP_WELCOME") and is_first_run() and not run_setup_wizard():
+        return 0
 
     loop = qasync.QEventLoop(app)
     try:
-        loop.run_until_complete(main_async(app))
+        return loop.run_until_complete(main_async(app)) or 0
     finally:
         loop.close()
 
 
-async def main_async(app: YASBApplication):
+async def main_async(app: YASBApplication) -> int:
     """
     Async entry point
     Required for qasync to work properly
@@ -158,6 +167,7 @@ async def main_async(app: YASBApplication):
                 logging.error("Failed to start auto update service: %s", e)
 
         await app_close_event.wait()
+        return int(getattr(app, "exit_code", 0))
     finally:
         # Cancel async tasks while loop is still running
         current = asyncio.current_task()
@@ -184,8 +194,8 @@ if __name__ == "__main__":
 
     try:
         # Acquire the single instance lock before doing any heavy initialization
-        with single_instance_lock():
-            main()
+        with single_instance_lock(_instance_lock_name()):
+            sys.exit(main() or 0)
     except Exception:
         logging.exception("Exception during application startup")
         sys.exit(1)

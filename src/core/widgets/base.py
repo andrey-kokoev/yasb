@@ -269,10 +269,13 @@ class BaseWidget(QWidget):
     def _handle_mouse_events(self, event: QMouseEvent):
         self._sync_pointer_cursor()
         if event.button() == Qt.MouseButton.LeftButton:
+            logging.info("[YASB_CLICK] widget=%s button=left callback=%s", self.widget_name, self.callback_left)
             self._run_callback(self.callback_left)
         elif event.button() == Qt.MouseButton.MiddleButton:
+            logging.info("[YASB_CLICK] widget=%s button=middle callback=%s", self.widget_name, self.callback_middle)
             self._run_callback(self.callback_middle)
         elif event.button() == Qt.MouseButton.RightButton:
+            logging.info("[YASB_CLICK] widget=%s button=right callback=%s", self.widget_name, self.callback_right)
             self._run_callback(self.callback_right)
 
     def _sync_pointer_cursor(self):
@@ -311,9 +314,11 @@ class BaseWidget(QWidget):
         self.callback = self.callbacks[callback_type if is_valid_callback else "default"]
 
         try:
+            logging.info("[YASB_ACTION] widget=%s type=%s args=%s", self.widget_name, callback_type, callback_args)
             self.callbacks[callback_type](*callback_args)
+            logging.info("[YASB_ACTION_OK] widget=%s type=%s", self.widget_name, callback_type)
         except Exception:
-            logging.exception("Failed to execute callback of type '%s' with args: %s", callback_type, callback_args)
+            logging.exception("[YASB_ACTION_FAIL] widget=%s type=%s args=%s", self.widget_name, callback_type, callback_args)
 
     def _timer_callback(self):
         self._run_callback(self.callback_timer)

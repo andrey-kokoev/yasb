@@ -2,7 +2,7 @@ import logging
 import uuid
 from contextlib import suppress
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QScreen
 from PyQt6.QtWidgets import QApplication
 from qt_css_engine import TransitionEngine, extract_rules
@@ -46,6 +46,11 @@ class BarManager(QObject):
         self._hotkey_dispatcher: HotkeyDispatcher | None = None
         self._collected_keybindings: list[HotkeyBinding] = []
         self._registered_hotkey_widgets: set[tuple[str, str]] = set()  # (widget_name, screen_name)
+        self._last_screen_signature = tuple(sorted(screen.name() for screen in QApplication.screens()))
+        self._screen_update_timer = QTimer(self)
+        self._screen_update_timer.setSingleShot(True)
+        self._screen_update_timer.setInterval(250)
+        self._screen_update_timer.timeout.connect(self._handle_screen_update_timeout)
 
         self.styles_modified.connect(self.on_styles_modified)
         self.config_modified.connect(self.on_config_modified)
@@ -93,9 +98,20 @@ class BarManager(QObject):
 
     @pyqtSlot(QScreen)
     def on_screens_update(self, _screen: QScreen) -> None:
-        logging.info("Screens updated. Re-initialising all bars.")
+        logging.info("Screens updated. Scheduling topology check.")
+        self._screen_update_timer.start()
+
+    @pyqtSlot()
+    def _handle_screen_update_timeout(self) -> None:
+        current_signature = tuple(sorted(screen.name() for screen in QApplication.screens()))
+        if current_signature == self._last_screen_signature:
+            logging.info("Screen topology unchanged after update event; ignoring.")
+            return
+
+        self._last_screen_signature = current_signature
+        logging.info("Screen topology changed. Re-initialising application.")
         self._disconnect_reload_signals()
-        reload_application("Reloading Application because of screen update.")
+        reload_application("Reloading Application because of screen topology change.")
 
     def run_listeners_in_threads(self):
         for listener in self.widget_event_listeners:

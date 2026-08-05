@@ -14,6 +14,7 @@ from core.widgets.services.komorebi.client import KomorebiClient
 
 KOMOREBI_PIPE_BUFF_SIZE = 64 * 1024
 KOMOREBI_PIPE_NAME = "yasb"
+KOMOREBI_OFFLINE_RETRY_SECONDS = (15, 30, 60)
 
 
 class KomorebiEventListener(QThread):
@@ -124,14 +125,24 @@ class KomorebiEventListener(QThread):
 
     def _wait_until_komorebi_online(self):
         state = self._komorebic.query_state()
+        retry_index = 0
+        logged_offline = False
         while self._app_running and state is None:
-            logging.error(
-                "Failed to retrieve komorebi state before starting event listener: None returned. "
-                "Retrying in 2 second... Is komorebi online and its binaries added to $PATH?"
-            )
-            if self._stop_event.wait(2):
+            retry_seconds = KOMOREBI_OFFLINE_RETRY_SECONDS[retry_index]
+            if not logged_offline:
+                logging.warning(
+                    "Komorebi is offline; the YASB Komorebi event listener is degraded until "
+                    "komorebic state succeeds. Retrying quietly with backoff."
+                )
+                logged_offline = True
+            else:
+                logging.debug("Komorebi is still offline; next state probe in %s seconds.", retry_seconds)
+
+            if self._stop_event.wait(retry_seconds):
                 return
             state = self._komorebic.query_state()
+            if retry_index < len(KOMOREBI_OFFLINE_RETRY_SECONDS) - 1:
+                retry_index += 1
 
         logging.debug("Waiting for Komorebi to subscribe to named pipe %s", self.pipe_name)
         stderr, proc = self._komorebic.wait_until_subscribed_to_pipe(self.pipe_name)

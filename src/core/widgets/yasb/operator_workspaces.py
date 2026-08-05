@@ -3,8 +3,11 @@ import logging
 import subprocess
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import QApplication, QPushButton, QSizePolicy, QVBoxLayout
+import re
+
+from PyQt6.QtCore import Qt, QTimer, QSize
+from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtWidgets import QApplication, QFrame, QHBoxLayout, QPushButton, QSizePolicy, QVBoxLayout
 
 from core.utils.tooltip import set_tooltip
 from core.utils.utilities import PopupWidget, refresh_widget_style
@@ -205,6 +208,73 @@ class OperatorWorkspaceButton(QPushButton):
         refresh_widget_style(self)
 
 
+def _img_src_from_html(fragment: str) -> str | None:
+    match = re.search(r'src=(["\'])([^"\']+?)\1', fragment)
+    return match.group(2) if match else None
+
+
+class OperatorWorkspaceRefreshButton(QPushButton):
+    def __init__(self, parent: "OperatorWorkspacesWidget"):
+        super().__init__(parent)
+        self.parent_widget = parent
+        self.workspace_id = ""
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setProperty("class", "ws-btn ws-reapply-btn")
+        label = self.parent_widget.config.refresh_button_label or ""
+        src = _img_src_from_html(label)
+        if src:
+            self.setIcon(QIcon(src))
+            self.setText("")
+            self.setIconSize(QSize(16, 16))
+        else:
+            self.setText(label)
+        self.clicked.connect(self._on_clicked)
+        self.setVisible(False)
+        refresh_widget_style(self)
+
+    def _on_clicked(self):
+        self.parent_widget.refresh_workspace(self.workspace_id)
+
+    def update_from_workspace(self, workspace_id: str, active: bool):
+        self.workspace_id = workspace_id
+        self.setVisible(active)
+        if active:
+            tooltip = self.parent_widget.config.refresh_button_tooltip or "Repair and reapply active workspace"
+            set_tooltip(self, tooltip, delay=400, position="top")
+        refresh_widget_style(self)
+
+
+class OperatorWorkspaceTile(QFrame):
+    def __init__(self, workspace: dict, active: bool, parent: "OperatorWorkspacesWidget"):
+        super().__init__(parent)
+        self.parent_widget = parent
+        self.workspace_id = str(workspace.get("workspace_id") or "")
+        self.workspace_button = OperatorWorkspaceButton(workspace, active, parent)
+        self.reapply_button = OperatorWorkspaceRefreshButton(parent)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+        layout = QHBoxLayout(self)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.workspace_button)
+        layout.addWidget(self.reapply_button)
+
+        self.update_from_workspace(workspace, active)
+
+    def update_from_workspace(self, workspace: dict, active: bool):
+        self.workspace_id = str(workspace.get("workspace_id") or "")
+        self.workspace_button.update_from_workspace(workspace, active)
+        self.reapply_button.update_from_workspace(self.workspace_id, active)
+        classes = ["operator-workspace-tile"]
+        if active:
+            classes.append("active")
+        if _workspace_is_running(workspace):
+            classes.append("populated")
+        self.setProperty("class", " ".join(classes))
+        refresh_widget_style(self)
+
+
 class OperatorWorkspaceLaunchButton(QPushButton):
     def __init__(self, parent: "OperatorWorkspacesWidget"):
         super().__init__(parent)
@@ -238,7 +308,7 @@ class OperatorWorkspacesWidget(BaseWidget):
     def __init__(self, config: OperatorWorkspacesConfig):
         super().__init__(config.update_interval, class_name="operator-workspaces")
         self.config = config
-        self._buttons: dict[str, OperatorWorkspaceButton] = {}
+        self._buttons: dict[str, OperatorWorkspaceTile] = {}
         self._launch_button: OperatorWorkspaceLaunchButton | None = None
         self._launch_popup: PopupWidget | None = None
         self._launchable_workspaces: list[dict] = []
@@ -329,6 +399,35 @@ class OperatorWorkspacesWidget(BaseWidget):
             QTimer.singleShot(250, self.refresh_workspaces)
         except Exception:
             logging.exception("Failed to switch Narada operator workspace to %s", workspace_id)
+
+    def refresh_workspace(self, workspace_id: str):
+        if not workspace_id:
+            return
+        try:
+            authority_script = self.config.repair_authority_script_path or str(
+                Path(self.config.pc_site_root) / "tools" / "komorebi" / "Invoke-KomorebiRepairAuthority.ps1"
+            )
+            args = [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                authority_script,
+                "-Intent", "reconcile_operator_workspace",
+                "-Posture", "live_mutating",
+                "-MutatingAuthorized", self.config.mutating_authorized,
+                "-PassThru",
+            ]
+            subprocess.Popen(
+                args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            QTimer.singleShot(400, self.refresh_workspaces)
+        except Exception:
+            logging.exception("Failed to refresh Narada operator workspace %s", workspace_id)
 
     def toggle_launch_inventory(self):
         if self._launch_popup and self._launch_popup.isVisible():
@@ -455,6 +554,13 @@ class OperatorWorkspacesWidget(BaseWidget):
             if workspace is not None:
                 visible.append(workspace)
 
+        for projected_workspace in selector.get("launchable_workspaces") or []:
+            workspace_id = str(projected_workspace.get("workspace_id") or "")
+            if not workspace_id:
+                continue
+            projected_ids.append(workspace_id)
+            visible.append(projected_workspace)
+
         active_workspace_id = str(selector.get("active_workspace_id") or "")
         active_signature = (
             "selector_projection",
@@ -478,13 +584,13 @@ class OperatorWorkspacesWidget(BaseWidget):
             if not workspace_id:
                 continue
             active = workspace_id == active_workspace_id
-            button = self._buttons.get(workspace_id)
-            if button is None:
-                button = OperatorWorkspaceButton(workspace, active, self)
-                self._buttons[workspace_id] = button
-                self._widget_container_layout.addWidget(button)
+            tile = self._buttons.get(workspace_id)
+            if tile is None:
+                tile = OperatorWorkspaceTile(workspace, active, self)
+                self._buttons[workspace_id] = tile
+                self._widget_container_layout.addWidget(tile)
             else:
-                button.update_from_workspace(workspace, active)
+                tile.update_from_workspace(workspace, active)
 
         self._renumber_visible_buttons()
 

@@ -39,11 +39,23 @@ def test_komorebi_state_query_uses_bounded_direct_process():
 
 
 def test_event_listener_queries_state_before_subscription():
-    method_source = ast.unparse(_method(_class(_module(EVENT_LISTENER), "KomorebiEventListener"), "_wait_until_komorebi_online"))
+    module = _module(EVENT_LISTENER)
+    method_source = ast.unparse(_method(_class(module, "KomorebiEventListener"), "_wait_until_komorebi_online"))
 
     assert method_source.index("query_state") < method_source.index("wait_until_subscribed_to_pipe")
     assert method_source.index("wait_until_subscribed_to_pipe") < method_source.index("ConnectNamedPipe")
     assert method_source.count("query_state") == 2
+    retry_assignments = [
+        node
+        for node in module.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "KOMOREBI_OFFLINE_RETRY_SECONDS" for target in node.targets)
+    ]
+    assert retry_assignments, "offline retry backoff constant not found"
+    retry_values = ast.literal_eval(retry_assignments[0].value)
+    assert retry_values == (15, 30, 60)
+    assert "Retrying in 2 second" not in method_source
+    assert "logging.debug" in method_source
 
 
 if __name__ == "__main__":

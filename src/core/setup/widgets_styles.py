@@ -403,6 +403,12 @@ OPERATOR_WORKSPACES_WIDGET_STYLE: str = """\
     color: var(--yasb-accent-fg);
     background-color: var(--yasb-accent);
 }
+.operator-workspaces .ws-reapply-btn {
+    min-width: 24px;
+    padding: 2px 6px;
+    margin: 0 2px 0 1px;
+    font-weight: 700;
+}
 .operator-workspaces .launch-btn {
     min-width: 28px;
 }
